@@ -853,32 +853,3 @@ def castVote():
 if __name__ == '__main__':
     create_tables()  # إنشاء الجداول عند بدء التطبيق
     app.run(debug=True,host='0.0.0.0')
-te_id)
-        else:
-            cursor.execute("""
-                INSERT INTO Result (ElectionID, CandidateID, CountVotes, ResultDate )
-                VALUES (%s, %s, 1, %s)
-            """, (election_id, candidate_id, date))
-
-        cursor.execute("""
-            UPDATE Voters
-            SET HasVoted = 1
-            WHERE VoterID = %s
-        """, (voter_id,))
-
-        connection.commit()
-        return jsonify({"message": "Vote recorded successfully"}), 201
-
-    except psycopg2.Error as e:
-        connection.rollback()
-        return jsonify({"error": str(e)}), 500
-
-    finally:
-        connection.close()
-   
-# تشغيل الخادم
-if __name__ == '__main__':
-    create_tables()  # إنشاء الجداول عند بدء التطبيق
-    app.run(debug=True,host='0.0.0.0')
-  ')
-debug=True,host='0.0.0.0')
