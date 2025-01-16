@@ -853,7 +853,7 @@ def castVote():
 if __name__ == '__main__':
     create_tables()  # إنشاء الجداول عند بدء التطبيق
     app.run(debug=True,host='0.0.0.0')
-te_id))
+te_id)
         else:
             cursor.execute("""
                 INSERT INTO Result (ElectionID, CandidateID, CountVotes, ResultDate )
@@ -875,8 +875,10 @@ te_id))
 
     finally:
         connection.close()
-        
+   
 # تشغيل الخادم
 if __name__ == '__main__':
     create_tables()  # إنشاء الجداول عند بدء التطبيق
     app.run(debug=True,host='0.0.0.0')
+  ')
+debug=True,host='0.0.0.0')
