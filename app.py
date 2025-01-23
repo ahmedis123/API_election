@@ -123,53 +123,53 @@ def add_voter():
 
 # دالة لإضافة المرشحين
 @app.route('/candidates', methods=['POST'])
-def add_candidate():
-    data = request.get_json()
-    required_fields = ["NationalID", "CandidateName", "PartyName", "Biography", "CandidateProgram", "ElectionID"]
+     def add_candidate():
+         data = request.get_json()
+         required_fields = ["NationalID", "CandidateName", "PartyName", "Biography", "CandidateProgram", "ElectionID"]
 
-    if not all(field in data for field in required_fields):
-        return jsonify({"error": "Missing required fields"}), 400
+         if not all(field in data for field in required_fields):
+             return jsonify({"error": "Missing required fields"}), 400
 
-    connection = None
-    try:
-        connection = create_connection()
-        if connection is None:
-            return jsonify({"error": "Failed to connect to the database"}), 500
+         connection = None
+         try:
+             connection = create_connection()
+             if connection is None:
+                 return jsonify({"error": "Failed to connect to the database"}), 500
 
-        cursor = connection.cursor()
+             cursor = connection.cursor()
 
-        # التحقق من أن NationalID غير مكرر
-        cursor.execute("SELECT * FROM Candidates WHERE NationalID = %s", (data['NationalID'],))
-        if cursor.fetchone():
-            return jsonify({"error": "Candidate with this NationalID already exists"}), 400
+             # التحقق من أن NationalID غير مكرر
+             cursor.execute("SELECT * FROM Candidates WHERE NationalID = %s", (data['NationalID'],))
+             if cursor.fetchone():
+                 return jsonify({"error": "Candidate with this NationalID already exists"}), 400
 
-        # التحقق من أن ElectionID موجود
-        cursor.execute("SELECT * FROM Elections WHERE ElectionID = %s", (data['ElectionID'],))
-        if not cursor.fetchone():
-            return jsonify({"error": "ElectionID does not exist"}), 400
+             # التحقق من أن ElectionID موجود
+             cursor.execute("SELECT * FROM Elections WHERE ElectionID = %s", (data['ElectionID'],))
+             if not cursor.fetchone():
+                 return jsonify({"error": "ElectionID does not exist"}), 400
 
-        # إضافة المرشح
-        query = '''INSERT INTO Candidates (NationalID, CandidateName, PartyName, Biography, CandidateProgram, ElectionID)
-                   VALUES (%s, %s, %s, %s, %s, %s)'''
-        cursor.execute(query, (
-            data['NationalID'], data['CandidateName'], data['PartyName'],
-            data['Biography'], data['CandidateProgram'], data['ElectionID']
-        ))
-        connection.commit()
-        return jsonify({"message": "Candidate added successfully!"}), 201
+             # إضافة المرشح
+             query = '''INSERT INTO Candidates (NationalID, CandidateName, PartyName, Biography, CandidateProgram, ElectionID)
+                        VALUES (%s, %s, %s, %s, %s, %s)'''
+             cursor.execute(query, (
+                 data['NationalID'], data['CandidateName'], data['PartyName'],
+                 data['Biography'], data['CandidateProgram'], data['ElectionID']
+             ))
+             connection.commit()
+             return jsonify({"message": "Candidate added successfully!"}), 201
 
-    except psycopg2.IntegrityError as e:
-        print(f"Integrity error: {e}")
-        return jsonify({"error": "Duplicate entry or invalid data"}), 400
-    except psycopg2.Error as e:
-        print(f"Database error: {e}")
-        return jsonify({"error": "Database operation failed"}), 500
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-        return jsonify({"error": "An unexpected error occurred"}), 500
-    finally:
-        if connection:
-            connection.close()
+         except psycopg2.IntegrityError as e:
+             print(f"Integrity error: {e}")
+             return jsonify({"error": "Duplicate entry or invalid data"}), 400
+         except psycopg2.Error as e:
+             print(f"Database error: {e}")
+             return jsonify({"error": "Database operation failed"}), 500
+         except Exception as e:
+             print(f"Unexpected error: {e}")
+             return jsonify({"error": "An unexpected error occurred"}), 500
+         finally:
+             if connection:
+                 connection.close()
 # دالة لإضافة الانتخابات
 @app.route('/elections', methods=['POST'])
 def add_election():
