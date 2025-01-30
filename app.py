@@ -6,17 +6,12 @@ import hashlib
 app = Flask(__name__)
 
 # دالة للاتصال بقاعدة البيانات PostgreSQL
+
 def create_connection():
     connection = None
     try:
-        connection = psycopg2.connect(
-            dbname="election_sys",
-            user="admin",
-            password="0n4a8VaVktozo7N8VKrYvOMAaXaFdOq0",
-            host="dpg-cu4br6l6l47c73b11lt0-a.oregon-postgres.render.com",
-            port="5432"
-        )
-    except Exception as e:
+        connection = psycopg2.connect("postgresql://admin:0n4a8VaVktozo7N8VKrYvOMAaXaFdOq0@dpg-cu4br6l6l47c73b11lt0-a.oregon-postgres.render.com/election_sys_pnjq")
+    except Error as e:
         print(f"Error: {e}")
     return connection
 
