@@ -6,7 +6,6 @@ import hashlib
 app = Flask(__name__)
 
 # دالة للاتصال بقاعدة البيانات PostgreSQL
-
 def create_connection():
     connection = None
     try:
@@ -125,7 +124,8 @@ def add_voter():
                 '''
                 cursor.execute(query, (
                     data['NationalID'], data['VoterName'], data['State'], data['Email'],
-                    data['HasVoted'], data['DateOfBirth'], data['Gender'], hashed_password, data['Phone']
+                    bool(data['HasVoted']),  # تحويل القيمة إلى منطقية
+                    data['DateOfBirth'], data['Gender'], hashed_password, data['Phone']
                 ))
                 connection.commit()
                 return jsonify({"message": "Voter added successfully!"}), 201
@@ -295,7 +295,7 @@ def get_voters():
                 "VoterName": row[2],
                 "State": row[3],
                 "Email": row[4],
-                "HasVoted": row[5],
+                "HasVoted": row[5],  # القيمة المنطقية
                 "DateOfBirth": row[6],
                 "Gender": row[7],
                 "Password": row[8],
@@ -473,10 +473,10 @@ def update_voter(voter_id):
             '''
             cursor.execute(query, (
                 data['NationalID'], data['VoterName'], data['State'], data['Email'],
-                data['HasVoted'], data['DateOfBirth'], data['Gender'], hashed_password,
+                bool(data['HasVoted']),  # تحويل القيمة إلى منطقية
+                data['DateOfBirth'], data['Gender'], hashed_password,
                 data['Phone'], voter_id
             ))
-        
             conn.commit()
    
             if cursor.rowcount == 0:
@@ -828,7 +828,7 @@ def cast_vote():
         voter = cursor.fetchone()
         if not voter:
             return jsonify({"error": "Voter not found"}), 404
-        if voter[0] == 1:
+        if voter[0]:  # التحقق من القيمة المنطقية
             return jsonify({"error": "Voter has already voted"}), 403
 
         cursor.execute("""
@@ -855,7 +855,7 @@ def cast_vote():
 
         cursor.execute("""
             UPDATE Voters
-            SET HasVoted = 1
+            SET HasVoted = TRUE
             WHERE VoterID = %s
         """, (voter_id,))
 
