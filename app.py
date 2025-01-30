@@ -25,69 +25,86 @@ def create_tables():
     with create_connection() as connection:
         if connection is not None:
             cursor = connection.cursor()
+            try:
+                # Create Elections table first
+                cursor.execute('''CREATE TABLE IF NOT EXISTS Elections (
+                                    ElectionID SERIAL PRIMARY KEY,
+                                    ElectionDate TEXT,
+                                    ElectionType TEXT,
+                                    ElectionStatus TEXT
+                                )''')
+                print("Elections table created successfully.")
 
-            cursor.execute('''CREATE TABLE IF NOT EXISTS Elections (
-                                ElectionID SERIAL PRIMARY KEY,
-                                ElectionDate TEXT,
-                                ElectionType TEXT,
-                                ElectionStatus TEXT
-                            )''')
+                # Create Voters table
+                cursor.execute('''CREATE TABLE IF NOT EXISTS Voters (
+                                    VoterID SERIAL PRIMARY KEY,
+                                    NationalID TEXT UNIQUE,
+                                    VoterName TEXT,
+                                    State TEXT,
+                                    Email TEXT,
+                                    HasVoted BOOLEAN,
+                                    DateOfBirth DATE,
+                                    Gender TEXT,
+                                    Password TEXT,
+                                    Phone TEXT UNIQUE
+                                )''')
+                print("Voters table created successfully.")
 
-            cursor.execute('''CREATE TABLE IF NOT EXISTS Voters (
-                                VoterID SERIAL PRIMARY KEY,
-                                NationalID TEXT UNIQUE,
-                                VoterName TEXT,
-                                State TEXT,
-                                Email TEXT,
-                                HasVoted BOOLEAN,
-                                DateOfBirth DATE,
-                                Gender TEXT,
-                                Password TEXT,
-                                Phone TEXT UNIQUE
-                            )''')
+                # Create Candidates table
+                cursor.execute('''CREATE TABLE IF NOT EXISTS Candidates (
+                                    CandidateID SERIAL PRIMARY KEY,
+                                    NationalID TEXT UNIQUE,
+                                    CandidateName TEXT,
+                                    PartyName TEXT,
+                                    Biography TEXT,
+                                    CandidateProgram TEXT,
+                                    ElectionID INTEGER,
+                                    FOREIGN KEY (ElectionID) REFERENCES Elections (ElectionID) ON DELETE CASCADE
+                                )''')
+                print("Candidates table created successfully.")
 
-            cursor.execute('''CREATE TABLE IF NOT EXISTS Candidates (
-                                CandidateID SERIAL PRIMARY KEY,
-                                NationalID TEXT UNIQUE,
-                                CandidateName TEXT,
-                                PartyName TEXT,
-                                Biography TEXT,
-                                CandidateProgram TEXT,
-                                ElectionID INTEGER,
-                                FOREIGN KEY (ElectionID) REFERENCES Elections (ElectionID) ON DELETE CASCADE
-                            )''')
+                # Create Votes table
+                cursor.execute('''CREATE TABLE IF NOT EXISTS Votes (
+                                    VoteID SERIAL PRIMARY KEY,
+                                    VoterID INTEGER,
+                                    ElectionDate TEXT,
+                                    CandidateID INTEGER,
+                                    ElectionID INTEGER,
+                                    FOREIGN KEY (VoterID) REFERENCES Voters (VoterID),
+                                    FOREIGN KEY (CandidateID) REFERENCES Candidates (CandidateID),
+                                    FOREIGN KEY (ElectionID) REFERENCES Elections (ElectionID)
+                                )''')
+                print("Votes table created successfully.")
 
-            cursor.execute('''CREATE TABLE IF NOT EXISTS Votes (
-                                VoteID SERIAL PRIMARY KEY,
-                                VoterID INTEGER,
-                                ElectionDate TEXT,
-                                CandidateID INTEGER,
-                                ElectionID INTEGER,
-                                FOREIGN KEY (VoterID) REFERENCES Voters (VoterID),
-                                FOREIGN KEY (CandidateID) REFERENCES Candidates (CandidateID),
-                                FOREIGN KEY (ElectionID) REFERENCES Elections (ElectionID)
-                            )''')
+                # Create Results table
+                cursor.execute('''CREATE TABLE IF NOT EXISTS Results (
+                                    ResultID SERIAL PRIMARY KEY,
+                                    CountVotes INTEGER,
+                                    CandidateID INTEGER,
+                                    ResultDate TEXT,
+                                    ElectionID INTEGER,
+                                    FOREIGN KEY (CandidateID) REFERENCES Candidates (CandidateID),
+                                    FOREIGN KEY (ElectionID) REFERENCES Elections (ElectionID)
+                                )''')
+                print("Results table created successfully.")
 
-            cursor.execute('''CREATE TABLE IF NOT EXISTS Results (
-                                ResultID SERIAL PRIMARY KEY,
-                                CountVotes INTEGER,
-                                CandidateID INTEGER,
-                                ResultDate TEXT,
-                                ElectionID INTEGER,
-                                FOREIGN KEY (CandidateID) REFERENCES Candidates (CandidateID),
-                                FOREIGN KEY (ElectionID) REFERENCES Elections (ElectionID)
-                            )''')
+                # Create Admins table
+                cursor.execute('''CREATE TABLE IF NOT EXISTS Admins (
+                                    AdminID SERIAL PRIMARY KEY,
+                                    AdminName TEXT,
+                                    Email TEXT UNIQUE,
+                                    Password TEXT,
+                                    Privileges TEXT
+                                )''')
+                print("Admins table created successfully.")
 
-            cursor.execute('''CREATE TABLE IF NOT EXISTS Admins (
-                                AdminID SERIAL PRIMARY KEY,
-                                AdminName TEXT,
-                                Email TEXT UNIQUE,
-                                Password TEXT,
-                                Privileges TEXT
-                            )''')
-
-            connection.commit()
-            print("Tables created successfully.")
+                connection.commit()
+                print("All tables created successfully.")
+            except psycopg2.Error as e:
+                print(f"Error creating tables: {e}")
+                connection.rollback()
+            finally:
+                cursor.close()
         else:
             print("Failed to create tables due to database connection error.")
 
