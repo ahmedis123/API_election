@@ -9,7 +9,7 @@ app = Flask(__name__)
 def create_connection():
     connection = None
     try:
-        connection = psycopg2.connect("postgresql://admin:0n4a8VaVktozo7N8VKrYvOMAaXaFdOq0@dpg-cu4br6l6l47c73b11lt0-a.oregon-postgres.render.com/election_sys_pnjq")
+        connection = psycopg2.connect("postgresql://postgres:Ahmedis123@a@db.frzhxdxupmnuozfwnjcg.supabase.co:5432/postgres")
     except Error as e:
         print(f"Error: {e}")
     return connection
