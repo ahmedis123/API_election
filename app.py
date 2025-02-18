@@ -10,9 +10,17 @@ app = Flask(__name__)
 def create_connection():
     connection = None
     try:
-        connection = psycopg2.connect("postgresql://postgres.frzhxdxupmnuozfwnjcg:Ahmedis123%40a@aws-0-eu-central-1.pooler.supabase.com:5432/postgres")
+        connection = psycopg2.connect(
+            host="db.frzhxdxupmnuozfwnjcg.supabase.co",
+            port="5432",
+            database="postgres",
+            user="postgres",
+            password="Ahmedis123@a"  # تأكد من أن كلمة المرور مكتوبة بشكل صحيح
+        )
+        print("تم الاتصال بقاعدة البيانات بنجاح")
     except Error as e:
-        print(f"Error: {e}")
+        print(f"حدث خطأ أثناء الاتصال بقاعدة البيانات: {e}")
+    
     return connection
 
 # دالة تشفير كلمة المرور
