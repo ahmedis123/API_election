@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 import psycopg2
+from psycopg2 import Error
 from psycopg2 import sql, errors
 import hashlib
 
@@ -9,7 +10,7 @@ app = Flask(__name__)
 def create_connection():
     connection = None
     try:
-        connection = psycopg2.connect("postgresql://postgres:Ahmedis123@a@db.frzhxdxupmnuozfwnjcg.supabase.co:5432/postgres")
+        connection = psycopg2.connect("postgresql://postgres:Ahmedis123%40a@db.frzhxdxupmnuozfwnjcg.supabase.co:5432/postgres")
     except Error as e:
         print(f"Error: {e}")
     return connection
