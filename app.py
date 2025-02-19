@@ -11,10 +11,10 @@ def create_connection():
     connection = None
     try:
         connection = psycopg2.connect(
-            host="db.frzhxdxupmnuozfwnjcg.supabase.co",
-            port="5432",
+            host="aws-0-eu-central-1.pooler.supabase.com",
+            port="6543",
             database="postgres",
-            user="postgres",
+            user="postgres.frzhxdxupmnuozfwnjcg",
             password="Ahmedis123@a"  # تأكد من أن كلمة المرور مكتوبة بشكل صحيح
         )
         print("تم الاتصال بقاعدة البيانات بنجاح")
