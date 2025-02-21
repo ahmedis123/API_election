@@ -5,7 +5,7 @@ import hashlib
 
 app = Flask(__name__)
 
-# دالة للاتصال بقاعدة البيانات
+# Database connection function
 def create_connection():
     connection = None
     try:
@@ -14,21 +14,21 @@ def create_connection():
             port="6543",
             database="postgres",
             user="postgres.frzhxdxupmnuozfwnjcg",
-            password="Ahmedis123@a"  # تأكد من أن كلمة المرور مكتوبة بشكل صحيح
+            password="Ahmedis123@a"  # Ensure the password is correct
         )
-        print("تم الاتصال بقاعدة البيانات بنجاح")
+        print("Database connection successful")
     except Error as e:
-        print(f"حدث خطأ أثناء الاتصال بقاعدة البيانات: {e}")
+        print(f"Error connecting to the database: {e}")
     
     return connection
 
-# دالة تشفير كلمة المرور
+# Password hashing function
 def hash_password(password):
     combined = password + "Elction"
     hashed_password = hashlib.sha256(combined.encode()).hexdigest()
     return hashed_password
 
-# دالة لإنشاء الجداول
+# Function to create tables
 def create_tables():
     with create_connection() as connection:
         if connection is not None:
@@ -116,7 +116,7 @@ def create_tables():
         else:
             print("Failed to create tables due to database connection error.")
 
-# دالة لإضافة الناخبين
+# Function to add voters
 @app.route('/voters', methods=['POST'])
 def add_voter():
     data = request.get_json()
@@ -146,7 +146,7 @@ def add_voter():
                 print(f"Database error: {e}")
                 return jsonify({"error": "Database operation failed"}), 500
 
-# دالة لإضافة المرشحين
+# Function to add candidates
 @app.route('/candidates', methods=['POST'])
 def add_candidate():
     data = request.get_json()
@@ -163,17 +163,17 @@ def add_candidate():
 
         cursor = connection.cursor()
 
-             # التحقق من أن NationalID غير مكرر
+        # Check if NationalID is unique
         cursor.execute("SELECT * FROM Candidates WHERE NationalID = %s", (data['NationalID'],))
         if cursor.fetchone():
             return jsonify({"error": "Candidate with this NationalID already exists"}), 400
 
-             # التحقق من أن ElectionID موجود
+        # Check if ElectionID exists
         cursor.execute("SELECT * FROM Elections WHERE ElectionID = %s", (data['ElectionID'],))
         if not cursor.fetchone():
             return jsonify({"error": "ElectionID does not exist"}), 400
 
-             # إضافة المرشح
+        # Add candidate
         query = '''INSERT INTO Candidates (NationalID, CandidateName, PartyName, Biography, CandidateProgram, ElectionID)
                 VALUES (%s, %s, %s, %s, %s, %s)'''
         cursor.execute(query, (
@@ -196,7 +196,7 @@ def add_candidate():
         if connection:
             connection.close()
 
-# دالة لإضافة الانتخابات
+# Function to add elections
 @app.route('/elections', methods=['POST'])
 def add_election():
     data = request.get_json()
@@ -221,7 +221,7 @@ def add_election():
                 print(f"Database error: {e}")
                 return jsonify({"error": "Database operation failed"}), 500
 
-# دالة لإضافة تصويت
+# Function to add votes
 @app.route('/votes', methods=['POST'])
 def add_vote():
     data = request.get_json()
@@ -246,7 +246,7 @@ def add_vote():
                 print(f"Database error: {e}")
                 return jsonify({"error": "Database operation failed"}), 500
 
-# دالة لإضافة نتيجة
+# Function to add results
 @app.route('/results', methods=['POST'])
 def add_result():
     data = request.get_json()
@@ -271,7 +271,7 @@ def add_result():
                 print(f"Database error: {e}")
                 return jsonify({"error": "Database operation failed"}), 500
 
-# دالة لإضافة مدير النظام
+# Function to add admins
 @app.route('/admin', methods=['POST'])
 def add_admin():
     data = request.get_json()
@@ -298,7 +298,7 @@ def add_admin():
                 print(f"Database error: {e}")
                 return jsonify({"error": "Database operation failed"}), 500
 
-# دالة لاسترجاع الناخبين
+# Function to retrieve voters
 @app.route('/voters', methods=['GET'])
 def get_voters():
     with create_connection() as conn:
@@ -325,7 +325,7 @@ def get_voters():
             })
         return jsonify(voters), 200
 
-# دالة لاسترجاع المرشحين
+# Function to retrieve candidates
 @app.route('/candidates', methods=['GET'])
 def get_candidates():
     with create_connection() as conn:
@@ -349,7 +349,7 @@ def get_candidates():
             })
         return jsonify(candidate_list), 200
 
-# دالة لاسترجاع المرشحين باستخدام معرف الانتخابات
+# Function to retrieve candidates by election ID
 @app.route('/candidates/election/<int:election_id>', methods=['GET'])
 def get_candidates_by_election(election_id):
     if election_id <= 0:
@@ -376,7 +376,7 @@ def get_candidates_by_election(election_id):
             })
         return jsonify(candidate_list), 200
 
-# دالة لاسترجاع الانتخابات
+# Function to retrieve elections
 @app.route('/elections', methods=['GET'])
 def get_elections():
     with create_connection() as conn:
@@ -397,7 +397,7 @@ def get_elections():
             })
         return jsonify(elections), 200
 
-# دالة لاسترجاع التصويت
+# Function to retrieve votes
 @app.route('/votes', methods=['GET'])
 def get_votes():
     with create_connection() as conn:
@@ -419,7 +419,7 @@ def get_votes():
             })
         return jsonify(votes), 200
 
-# دالة لاسترجاع النتائج
+# Function to retrieve results
 @app.route('/results', methods=['GET'])
 def get_results():
     with create_connection() as conn:
@@ -441,7 +441,7 @@ def get_results():
             })
         return jsonify(results), 200
 
-# دالة لاسترجاع مدير النظام
+# Function to retrieve admins
 @app.route('/admin', methods=['GET'])
 def get_admin():
     with create_connection() as conn:
@@ -463,7 +463,7 @@ def get_admin():
             })
         return jsonify(admins), 200
 
-# دالة لحذف الناخب
+# Function to delete a voter
 @app.route('/voters/<int:voter_id>', methods=['DELETE'])
 def delete_voter(voter_id):
     if voter_id <= 0:
@@ -483,7 +483,7 @@ def delete_voter(voter_id):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-# دالة لتحديث الناخب
+# Function to update a voter
 @app.route('/voters/<int:voter_id>', methods=['PUT'])
 def update_voter(voter_id):
     if voter_id <= 0:
@@ -521,7 +521,7 @@ def update_voter(voter_id):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-# دالة لتحديث مرشح
+# Function to update a candidate
 @app.route('/candidates/<int:candidate_id>', methods=['PUT'])
 def update_candidate(candidate_id):
     if candidate_id <= 0:
@@ -557,7 +557,7 @@ def update_candidate(candidate_id):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-# دالة لحذف مرشح
+# Function to delete a candidate
 @app.route('/candidates/<int:candidate_id>', methods=['DELETE'])
 def delete_candidate(candidate_id):
     if candidate_id <= 0:
@@ -577,7 +577,7 @@ def delete_candidate(candidate_id):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-# دالة لتحديث الانتخابات
+# Function to update an election
 @app.route('/elections/<int:election_id>', methods=['PUT'])
 def update_election(election_id):
     if election_id <= 0:
@@ -611,7 +611,7 @@ def update_election(election_id):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-# دالة لحذف الانتخابات
+# Function to delete an election
 @app.route('/elections/<int:election_id>', methods=['DELETE'])
 def delete_election(election_id):
     if election_id <= 0:
@@ -631,7 +631,7 @@ def delete_election(election_id):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-# دالة لتحديث مدير نظام
+# Function to update an admin
 @app.route('/admin/<int:admin_id>', methods=['PUT'])
 def update_admin(admin_id):
     if admin_id <= 0:
@@ -667,7 +667,7 @@ def update_admin(admin_id):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-# دالة لحذف مدير نظام
+# Function to delete an admin
 @app.route('/admin/<int:admin_id>', methods=['DELETE'])
 def delete_admin(admin_id):
     if admin_id <= 0:
@@ -687,7 +687,7 @@ def delete_admin(admin_id):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-# دالة لاسترجاع النتائج مرتبة حسب عدد الأصوات
+# Function to retrieve election results sorted by vote count
 @app.route('/election_results/<int:election_id>', methods=['GET'])
 def get_election_results(election_id):
     if election_id <= 0:
@@ -725,7 +725,7 @@ def get_election_results(election_id):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-# دالة لتحديث التصويت
+# Function to update a vote
 @app.route('/votes/<int:vote_id>', methods=['PUT'])
 def update_vote(vote_id):
     if vote_id <= 0:
@@ -757,7 +757,7 @@ def update_vote(vote_id):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-# دالة لتسجيل الدخول
+# Function to login
 @app.route('/login', methods=['POST'])
 def login():
     data = request.get_json()
@@ -796,7 +796,7 @@ def login():
     finally:
         connection.close()
 
-# دالة لتسجيل الدخول مدير النظام
+# Function to login as admin
 @app.route('/login_admin', methods=['POST'])
 def login_admin():
     data = request.get_json()
@@ -839,13 +839,13 @@ def castVote():
     cursor = connection.cursor()
 
     try:
-        # 1. التحقق من حالة الناخب
+        # 1. Check voter status
         cursor.execute("SELECT HasVoted FROM Voters WHERE VoterID = %s", (voter_id,))
         voter = cursor.fetchone()
         if not voter:
             return jsonify({"error": "Voter not found"}), 404
 
-        if voter[0]:  # إذا كان الناخب قد صوت بالفعل
+        if voter[0]:  # If the voter has already voted
             return jsonify({"error": "Voter has already voted"}), 400
 
         cursor.execute("""
@@ -886,7 +886,7 @@ def castVote():
     finally:
         connection.close()
 
-# تشغيل الخادم
+# Run the server
 if __name__ == '__main__':
-    create_tables()  # إنشاء الجداول عند بدء التطبيق
+    create_tables()  # Create tables when the application starts
     app.run(debug=False, host='0.0.0.0')
