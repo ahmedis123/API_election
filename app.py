@@ -1,9 +1,11 @@
-from flask import Flask, request, jsonify
+from fastapi import FastAPI, HTTPException, Depends, status, Response
+from pydantic import BaseModel
 import psycopg2
 from psycopg2 import Error
 import hashlib
+from typing import List, Optional
 
-app = Flask(__name__)
+app = FastAPI()
 
 # Database connection function
 def create_connection():
@@ -23,7 +25,7 @@ def create_connection():
     return connection
 
 # Password hashing function
-def hash_password(password):
+def hash_password(password: str) -> str:
     combined = password + "Elction"
     hashed_password = hashlib.sha256(combined.encode()).hexdigest()
     return hashed_password
@@ -116,16 +118,53 @@ def create_tables():
         else:
             print("Failed to create tables due to database connection error.")
 
+# Pydantic models
+class Voter(BaseModel):
+    NationalID: str
+    VoterName: str
+    State: str
+    Email: str
+    HasVoted: bool
+    DateOfBirth: str
+    Gender: str
+    Password: str
+    Phone: str
+
+class Candidate(BaseModel):
+    NationalID: str
+    CandidateName: str
+    PartyName: str
+    Biography: str
+    CandidateProgram: str
+    ElectionID: int
+
+class Election(BaseModel):
+    ElectionDate: str
+    ElectionType: str
+    ElectionStatus: str
+
+class Vote(BaseModel):
+    VoterID: int
+    ElectionDate: str
+    CandidateID: int
+    ElectionID: int
+
+class Result(BaseModel):
+    CountVotes: int
+    CandidateID: int
+    ResultDate: str
+    ElectionID: int
+
+class Admin(BaseModel):
+    AdminName: str
+    Email: str
+    Password: str
+    Privileges: str
+
 # Function to add voters
-@app.route('/voters', methods=['POST'])
-def add_voter():
-    data = request.get_json()
-    required_fields = ["NationalID", "VoterName", "State", "Email", "HasVoted", "DateOfBirth", "Gender", "Password", "Phone"]
-
-    if not all(field in data for field in required_fields):
-        return jsonify({"error": "Missing required fields"}), 400
-
-    hashed_password = hash_password(data['Password'])
+@app.post("/voters", status_code=status.HTTP_201_CREATED)
+def add_voter(voter: Voter):
+    hashed_password = hash_password(voter.Password)
 
     with create_connection() as connection:
         if connection is not None:
@@ -134,153 +173,107 @@ def add_voter():
                 query = '''INSERT INTO Voters (NationalID, VoterName, State, Email, HasVoted, DateOfBirth, Gender, Password, Phone)
                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)'''
                 cursor.execute(query, (
-                    data['NationalID'], data['VoterName'], data['State'], data['Email'],
-                    data['HasVoted'], data['DateOfBirth'], data['Gender'], hashed_password, data['Phone']
+                    voter.NationalID, voter.VoterName, voter.State, voter.Email,
+                    voter.HasVoted, voter.DateOfBirth, voter.Gender, hashed_password, voter.Phone
                 ))
                 connection.commit()
-                return jsonify({"message": "Voter added successfully!"}), 201
+                return {"message": "Voter added successfully!"}
             except psycopg2.IntegrityError as e:
-                print(f"Integrity error: {e}")
-                return jsonify({"error": "Duplicate entry or invalid data"}), 400
+                raise HTTPException(status_code=400, detail="Duplicate entry or invalid data")
             except Exception as e:
-                print(f"Database error: {e}")
-                return jsonify({"error": "Database operation failed"}), 500
+                raise HTTPException(status_code=500, detail="Database operation failed")
 
 # Function to add candidates
-@app.route('/candidates', methods=['POST'])
-def add_candidate():
-    data = request.get_json()
-    required_fields = ["NationalID", "CandidateName", "PartyName", "Biography", "CandidateProgram", "ElectionID"]
-
-    if not all(field in data for field in required_fields):
-        return jsonify({"error": "Missing required fields"}), 400
-
-    connection = None
-    try:
-        connection = create_connection()
+@app.post("/candidates", status_code=status.HTTP_201_CREATED)
+def add_candidate(candidate: Candidate):
+    with create_connection() as connection:
         if connection is None:
-            return jsonify({"error": "Failed to connect to the database"}), 500
+            raise HTTPException(status_code=500, detail="Failed to connect to the database")
 
         cursor = connection.cursor()
 
-        # Check if NationalID is unique
-        cursor.execute("SELECT * FROM Candidates WHERE NationalID = %s", (data['NationalID'],))
-        if cursor.fetchone():
-            return jsonify({"error": "Candidate with this NationalID already exists"}), 400
+        try:
+            # Check if NationalID is unique
+            cursor.execute("SELECT * FROM Candidates WHERE NationalID = %s", (candidate.NationalID,))
+            if cursor.fetchone():
+                raise HTTPException(status_code=400, detail="Candidate with this NationalID already exists")
 
-        # Check if ElectionID exists
-        cursor.execute("SELECT * FROM Elections WHERE ElectionID = %s", (data['ElectionID'],))
-        if not cursor.fetchone():
-            return jsonify({"error": "ElectionID does not exist"}), 400
+            # Check if ElectionID exists
+            cursor.execute("SELECT * FROM Elections WHERE ElectionID = %s", (candidate.ElectionID,))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=400, detail="ElectionID does not exist")
 
-        # Add candidate
-        query = '''INSERT INTO Candidates (NationalID, CandidateName, PartyName, Biography, CandidateProgram, ElectionID)
-                VALUES (%s, %s, %s, %s, %s, %s)'''
-        cursor.execute(query, (
-            data['NationalID'], data['CandidateName'], data['PartyName'],
-            data['Biography'], data['CandidateProgram'], data['ElectionID']
-        ))
-        connection.commit()
-        return jsonify({"message": "Candidate added successfully!"}), 201
-
-    except psycopg2.IntegrityError as e:
-        print(f"Integrity error: {e}")
-        return jsonify({"error": "Duplicate entry or invalid data"}), 400
-    except psycopg2.Error as e:
-        print(f"Database error: {e}")
-        return jsonify({"error": "Database operation failed"}), 500
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-        return jsonify({"error": "An unexpected error occurred"}), 500
-    finally:
-        if connection:
-            connection.close()
+            # Add candidate
+            query = '''INSERT INTO Candidates (NationalID, CandidateName, PartyName, Biography, CandidateProgram, ElectionID)
+                    VALUES (%s, %s, %s, %s, %s, %s)'''
+            cursor.execute(query, (
+                candidate.NationalID, candidate.CandidateName, candidate.PartyName,
+                candidate.Biography, candidate.CandidateProgram, candidate.ElectionID
+            ))
+            connection.commit()
+            return {"message": "Candidate added successfully!"}
+        except psycopg2.IntegrityError as e:
+            raise HTTPException(status_code=400, detail="Duplicate entry or invalid data")
+        except psycopg2.Error as e:
+            raise HTTPException(status_code=500, detail="Database operation failed")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
 # Function to add elections
-@app.route('/elections', methods=['POST'])
-def add_election():
-    data = request.get_json()
-    required_fields = ["ElectionDate", "ElectionType", "ElectionStatus"]
-
-    if not all(field in data for field in required_fields):
-        return jsonify({"error": "Missing required fields"}), 400
-
+@app.post("/elections", status_code=status.HTTP_201_CREATED)
+def add_election(election: Election):
     with create_connection() as connection:
         if connection is not None:
             cursor = connection.cursor()
             try:
                 query = '''INSERT INTO Elections (ElectionDate, ElectionType, ElectionStatus)
                         VALUES (%s, %s, %s)'''
-                cursor.execute(query, (data['ElectionDate'], data['ElectionType'], data['ElectionStatus']))
+                cursor.execute(query, (election.ElectionDate, election.ElectionType, election.ElectionStatus))
                 connection.commit()
-                return jsonify({"message": "Election added successfully!"}), 201
+                return {"message": "Election added successfully!"}
             except psycopg2.IntegrityError as e:
-                print(f"Integrity error: {e}")
-                return jsonify({"error": "Duplicate entry or invalid data"}), 400
+                raise HTTPException(status_code=400, detail="Duplicate entry or invalid data")
             except Exception as e:
-                print(f"Database error: {e}")
-                return jsonify({"error": "Database operation failed"}), 500
+                raise HTTPException(status_code=500, detail="Database operation failed")
 
 # Function to add votes
-@app.route('/votes', methods=['POST'])
-def add_vote():
-    data = request.get_json()
-    required_fields = ["VoterID", "ElectionDate", "CandidateID", "ElectionID"]
-
-    if not all(field in data for field in required_fields):
-        return jsonify({"error": "Missing required fields"}), 400
-
+@app.post("/votes", status_code=status.HTTP_201_CREATED)
+def add_vote(vote: Vote):
     with create_connection() as connection:
         if connection is not None:
             cursor = connection.cursor()
             try:
                 query = '''INSERT INTO Votes (VoterID, ElectionDate, CandidateID, ElectionID)
                         VALUES (%s, %s, %s, %s)'''
-                cursor.execute(query, (data['VoterID'], data['ElectionDate'], data['CandidateID'], data['ElectionID']))
+                cursor.execute(query, (vote.VoterID, vote.ElectionDate, vote.CandidateID, vote.ElectionID))
                 connection.commit()
-                return jsonify({"message": "Vote added successfully!"}), 201
+                return {"message": "Vote added successfully!"}
             except psycopg2.IntegrityError as e:
-                print(f"Integrity error: {e}")
-                return jsonify({"error": "Duplicate entry or invalid data"}), 400
+                raise HTTPException(status_code=400, detail="Duplicate entry or invalid data")
             except Exception as e:
-                print(f"Database error: {e}")
-                return jsonify({"error": "Database operation failed"}), 500
+                raise HTTPException(status_code=500, detail="Database operation failed")
 
 # Function to add results
-@app.route('/results', methods=['POST'])
-def add_result():
-    data = request.get_json()
-    required_fields = ["CountVotes", "CandidateID", "ResultDate", "ElectionID"]
-
-    if not all(field in data for field in required_fields):
-        return jsonify({"error": "Missing required fields"}), 400
-
+@app.post("/results", status_code=status.HTTP_201_CREATED)
+def add_result(result: Result):
     with create_connection() as connection:
         if connection is not None:
             cursor = connection.cursor()
             try:
                 query = '''INSERT INTO Results (CountVotes, CandidateID, ResultDate, ElectionID)
                         VALUES (%s, %s, %s, %s)'''
-                cursor.execute(query, (data['CountVotes'], data['CandidateID'], data['ResultDate'], data['ElectionID']))
+                cursor.execute(query, (result.CountVotes, result.CandidateID, result.ResultDate, result.ElectionID))
                 connection.commit()
-                return jsonify({"message": "Result added successfully!"}), 201
+                return {"message": "Result added successfully!"}
             except psycopg2.IntegrityError as e:
-                print(f"Integrity error: {e}")
-                return jsonify({"error": "Duplicate entry or invalid data"}), 400
+                raise HTTPException(status_code=400, detail="Duplicate entry or invalid data")
             except Exception as e:
-                print(f"Database error: {e}")
-                return jsonify({"error": "Database operation failed"}), 500
+                raise HTTPException(status_code=500, detail="Database operation failed")
 
 # Function to add admins
-@app.route('/admin', methods=['POST'])
-def add_admin():
-    data = request.get_json()
-    required_fields = ["AdminName", "Email", "Password", "Privileges"]
-
-    if not all(field in data for field in required_fields):
-        return jsonify({"error": "Missing required fields"}), 400
-
-    hashed_password = hash_password(data['Password'])
+@app.post("/admin", status_code=status.HTTP_201_CREATED)
+def add_admin(admin: Admin):
+    hashed_password = hash_password(admin.Password)
 
     with create_connection() as connection:
         if connection is not None:
@@ -288,18 +281,16 @@ def add_admin():
             try:
                 query = '''INSERT INTO Admins (AdminName, Email, Password, Privileges)
                         VALUES (%s, %s, %s, %s)'''
-                cursor.execute(query, (data['AdminName'], data['Email'], hashed_password, data['Privileges']))
+                cursor.execute(query, (admin.AdminName, admin.Email, hashed_password, admin.Privileges))
                 connection.commit()
-                return jsonify({"message": "Admin added successfully!"}), 201
+                return {"message": "Admin added successfully!"}
             except psycopg2.IntegrityError as e:
-                print(f"Integrity error: {e}")
-                return jsonify({"error": "Duplicate entry or invalid data"}), 400
+                raise HTTPException(status_code=400, detail="Duplicate entry or invalid data")
             except Exception as e:
-                print(f"Database error: {e}")
-                return jsonify({"error": "Database operation failed"}), 500
+                raise HTTPException(status_code=500, detail="Database operation failed")
 
 # Function to retrieve voters
-@app.route('/voters', methods=['GET'])
+@app.get("/voters", response_model=List[Voter])
 def get_voters():
     with create_connection() as conn:
         cursor = conn.cursor()
@@ -307,12 +298,11 @@ def get_voters():
         rows = cursor.fetchall()
 
         if not rows:
-            return jsonify({"error": "No Voter found"}), 404
+            raise HTTPException(status_code=404, detail="No Voter found")
 
         voters = []
         for row in rows:
             voters.append({
-                "VoterID": row[0],
                 "NationalID": row[1],
                 "VoterName": row[2],
                 "State": row[3],
@@ -323,10 +313,10 @@ def get_voters():
                 "Password": row[8],
                 "Phone": row[9]
             })
-        return jsonify(voters), 200
+        return voters
 
 # Function to retrieve candidates
-@app.route('/candidates', methods=['GET'])
+@app.get("/candidates", response_model=List[Candidate])
 def get_candidates():
     with create_connection() as conn:
         cursor = conn.cursor()
@@ -334,12 +324,11 @@ def get_candidates():
         candidates = cursor.fetchall()
 
         if not candidates:
-            return jsonify({"error": "No candidates found"}), 404
+            raise HTTPException(status_code=404, detail="No candidates found")
 
         candidate_list = []
         for candidate in candidates:
             candidate_list.append({
-                "CandidateID": candidate[0],
                 "NationalID": candidate[1],
                 "CandidateName": candidate[2],
                 "PartyName": candidate[3],
@@ -347,13 +336,13 @@ def get_candidates():
                 "CandidateProgram": candidate[5],
                 "ElectionID": candidate[6]
             })
-        return jsonify(candidate_list), 200
+        return candidate_list
 
 # Function to retrieve candidates by election ID
-@app.route('/candidates/election/<int:election_id>', methods=['GET'])
-def get_candidates_by_election(election_id):
+@app.get("/candidates/election/{election_id}", response_model=List[Candidate])
+def get_candidates_by_election(election_id: int):
     if election_id <= 0:
-        return jsonify({"error": "Invalid ElectionID. It must be a positive integer."}), 400
+        raise HTTPException(status_code=400, detail="Invalid ElectionID. It must be a positive integer.")
 
     with create_connection() as conn:
         cursor = conn.cursor()
@@ -361,12 +350,11 @@ def get_candidates_by_election(election_id):
         candidates = cursor.fetchall()
 
         if not candidates:
-            return jsonify({"error": "No candidates found for the given ElectionID"}), 404
+            raise HTTPException(status_code=404, detail="No candidates found for the given ElectionID")
 
         candidate_list = []
         for candidate in candidates:
             candidate_list.append({
-                "CandidateID": candidate[0],
                 "NationalID": candidate[1],
                 "CandidateName": candidate[2],
                 "PartyName": candidate[3],
@@ -374,10 +362,10 @@ def get_candidates_by_election(election_id):
                 "CandidateProgram": candidate[5],
                 "ElectionID": candidate[6]
             })
-        return jsonify(candidate_list), 200
+        return candidate_list
 
 # Function to retrieve elections
-@app.route('/elections', methods=['GET'])
+@app.get("/elections", response_model=List[Election])
 def get_elections():
     with create_connection() as conn:
         cursor = conn.cursor()
@@ -385,20 +373,19 @@ def get_elections():
         rows = cursor.fetchall()
 
         if not rows:
-            return jsonify({"error": "No election found"}), 404
+            raise HTTPException(status_code=404, detail="No election found")
 
         elections = []
         for row in rows:
             elections.append({
-                "ElectionID": row[0],
                 "ElectionDate": row[1],
                 "ElectionType": row[2],
                 "ElectionStatus": row[3]
             })
-        return jsonify(elections), 200
+        return elections
 
 # Function to retrieve votes
-@app.route('/votes', methods=['GET'])
+@app.get("/votes", response_model=List[Vote])
 def get_votes():
     with create_connection() as conn:
         cursor = conn.cursor()
@@ -406,21 +393,20 @@ def get_votes():
         rows = cursor.fetchall()
 
         if not rows:
-            return jsonify({"error": "No vote found"}), 404
+            raise HTTPException(status_code=404, detail="No vote found")
 
         votes = []
         for row in rows:
             votes.append({
-                "VoteID": row[0],
                 "VoterID": row[1],
                 "ElectionDate": row[2],
                 "CandidateID": row[3],
                 "ElectionID": row[4]
             })
-        return jsonify(votes), 200
+        return votes
 
 # Function to retrieve results
-@app.route('/results', methods=['GET'])
+@app.get("/results", response_model=List[Result])
 def get_results():
     with create_connection() as conn:
         cursor = conn.cursor()
@@ -428,21 +414,20 @@ def get_results():
         rows = cursor.fetchall()
 
         if not rows:
-            return jsonify({"error": "No result found"}), 404
+            raise HTTPException(status_code=404, detail="No result found")
 
         results = []
         for row in rows:
             results.append({
-                "ResultID": row[0],
                 "CountVotes": row[1],
                 "CandidateID": row[2],
                 "ResultDate": row[3],
                 "ElectionID": row[4]
             })
-        return jsonify(results), 200
+        return results
 
 # Function to retrieve admins
-@app.route('/admin', methods=['GET'])
+@app.get("/admin", response_model=List[Admin])
 def get_admin():
     with create_connection() as conn:
         cursor = conn.cursor()
@@ -450,24 +435,23 @@ def get_admin():
         rows = cursor.fetchall()
 
         if not rows:
-            return jsonify({"error": "No admin found"}), 404
+            raise HTTPException(status_code=404, detail="No admin found")
 
         admins = []
         for row in rows:
             admins.append({
-                "AdminID": row[0],
                 "AdminName": row[1],
                 "Email": row[2],
                 "Password": row[3],
                 "Privileges": row[4]
             })
-        return jsonify(admins), 200
+        return admins
 
 # Function to delete a voter
-@app.route('/voters/<int:voter_id>', methods=['DELETE'])
-def delete_voter(voter_id):
+@app.delete("/voters/{voter_id}")
+def delete_voter(voter_id: int):
     if voter_id <= 0:
-        return jsonify({"error": "Invalid voter_id. It must be a positive integer."}), 400
+        raise HTTPException(status_code=400, detail="Invalid voter_id. It must be a positive integer.")
 
     with create_connection() as conn:
         try:
@@ -477,25 +461,19 @@ def delete_voter(voter_id):
             conn.commit()
 
             if cursor.rowcount == 0:
-                return jsonify({"error": "Voter not found"}), 404
+                raise HTTPException(status_code=404, detail="Voter not found")
 
-            return jsonify({"message": "Voter deleted successfully!"}), 200
+            return {"message": "Voter deleted successfully!"}
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            raise HTTPException(status_code=500, detail=str(e))
 
 # Function to update a voter
-@app.route('/voters/<int:voter_id>', methods=['PUT'])
-def update_voter(voter_id):
+@app.put("/voters/{voter_id}")
+def update_voter(voter_id: int, voter: Voter):
     if voter_id <= 0:
-        return jsonify({"error": "Invalid VoterID. It must be a positive integer."}), 400
+        raise HTTPException(status_code=400, detail="Invalid VoterID. It must be a positive integer.")
 
-    data = request.get_json()
-    updatable_fields = ["NationalID", "VoterName", "State", "Email", "HasVoted", "DateOfBirth", "Gender", "Password", "Phone"]
-    missing_fields = [field for field in updatable_fields if field not in data or data[field] == ""]
-    if missing_fields:
-        return jsonify({"error": f"Missing or empty fields: {', '.join(missing_fields)}"}), 400
-
-    hashed_password = hash_password(data['Password'])
+    hashed_password = hash_password(voter.Password)
 
     with create_connection() as conn:
         try:
@@ -506,32 +484,26 @@ def update_voter(voter_id):
                 WHERE VoterID = %s
             '''
             cursor.execute(query, (
-                data['NationalID'], data['VoterName'], data['State'], data['Email'],
-                data['HasVoted'], data['DateOfBirth'], data['Gender'], hashed_password,
-                data['Phone'], voter_id
+                voter.NationalID, voter.VoterName, voter.State, voter.Email,
+                voter.HasVoted, voter.DateOfBirth, voter.Gender, hashed_password,
+                voter.Phone, voter_id
             ))
             conn.commit()
 
             if cursor.rowcount == 0:
-                return jsonify({"error": "Voter not found or no changes made"}), 404
+                raise HTTPException(status_code=404, detail="Voter not found or no changes made")
 
-            return jsonify({"message": "Voter updated successfully!"}), 200
+            return {"message": "Voter updated successfully!"}
         except psycopg2.IntegrityError:
-            return jsonify({"error": "Duplicate entry or invalid data"}), 400
+            raise HTTPException(status_code=400, detail="Duplicate entry or invalid data")
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            raise HTTPException(status_code=500, detail=str(e))
 
 # Function to update a candidate
-@app.route('/candidates/<int:candidate_id>', methods=['PUT'])
-def update_candidate(candidate_id):
+@app.put("/candidates/{candidate_id}")
+def update_candidate(candidate_id: int, candidate: Candidate):
     if candidate_id <= 0:
-        return jsonify({"error": "Invalid CandidateID. It must be a positive integer."}), 400
-
-    data = request.get_json()
-    updatable_fields = ["NationalID", "CandidateName", "PartyName", "Biography", "CandidateProgram", "ElectionID"]
-    missing_fields = [field for field in updatable_fields if field not in data or data[field] == ""]
-    if missing_fields:
-        return jsonify({"error": f"Missing or empty fields: {', '.join(missing_fields)}"}), 400
+        raise HTTPException(status_code=400, detail="Invalid CandidateID. It must be a positive integer.")
 
     with create_connection() as conn:
         try:
@@ -543,25 +515,25 @@ def update_candidate(candidate_id):
                 WHERE CandidateID = %s
             '''
             cursor.execute(query, (
-                data["NationalID"], data["CandidateName"], data["PartyName"], data["Biography"],
-                data["CandidateProgram"], data["ElectionID"], candidate_id
+                candidate.NationalID, candidate.CandidateName, candidate.PartyName, candidate.Biography,
+                candidate.CandidateProgram, candidate.ElectionID, candidate_id
             ))
             conn.commit()
 
             if cursor.rowcount == 0:
-                return jsonify({"error": "Candidate not found or no changes made"}), 404
+                raise HTTPException(status_code=404, detail="Candidate not found or no changes made")
 
-            return jsonify({"message": "Candidate updated successfully!"}), 200
+            return {"message": "Candidate updated successfully!"}
         except psycopg2.IntegrityError:
-            return jsonify({"error": "Duplicate entry or invalid data"}), 400
+            raise HTTPException(status_code=400, detail="Duplicate entry or invalid data")
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            raise HTTPException(status_code=500, detail=str(e))
 
 # Function to delete a candidate
-@app.route('/candidates/<int:candidate_id>', methods=['DELETE'])
-def delete_candidate(candidate_id):
+@app.delete("/candidates/{candidate_id}")
+def delete_candidate(candidate_id: int):
     if candidate_id <= 0:
-        return jsonify({"error": "Invalid CandidateID. It must be a positive integer."}), 400
+        raise HTTPException(status_code=400, detail="Invalid CandidateID. It must be a positive integer.")
 
     with create_connection() as conn:
         try:
@@ -571,23 +543,17 @@ def delete_candidate(candidate_id):
             conn.commit()
 
             if cursor.rowcount == 0:
-                return jsonify({"error": "Candidate not found"}), 404
+                raise HTTPException(status_code=404, detail="Candidate not found")
 
-            return jsonify({"message": "Candidate deleted successfully!"}), 200
+            return {"message": "Candidate deleted successfully!"}
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            raise HTTPException(status_code=500, detail=str(e))
 
 # Function to update an election
-@app.route('/elections/<int:election_id>', methods=['PUT'])
-def update_election(election_id):
+@app.put("/elections/{election_id}")
+def update_election(election_id: int, election: Election):
     if election_id <= 0:
-        return jsonify({"error": "Invalid ElectionID. It must be a positive integer."}), 400
-
-    data = request.get_json()
-    updatable_fields = ["ElectionDate", "ElectionType", "ElectionStatus"]
-    missing_fields = [field for field in updatable_fields if field not in data or data[field] == ""]
-    if missing_fields:
-        return jsonify({"error": f"Missing or empty fields: {', '.join(missing_fields)}"}), 400
+        raise HTTPException(status_code=400, detail="Invalid ElectionID. It must be a positive integer.")
 
     with create_connection() as conn:
         try:
@@ -598,24 +564,24 @@ def update_election(election_id):
                 WHERE ElectionID = %s
             '''
             cursor.execute(query, (
-                data['ElectionDate'], data['ElectionType'], data['ElectionStatus'], election_id
+                election.ElectionDate, election.ElectionType, election.ElectionStatus, election_id
             ))
             conn.commit()
 
             if cursor.rowcount == 0:
-                return jsonify({"error": "Election not found or no changes made"}), 404
+                raise HTTPException(status_code=404, detail="Election not found or no changes made")
 
-            return jsonify({"message": "Election updated successfully!"}), 200
+            return {"message": "Election updated successfully!"}
         except psycopg2.IntegrityError:
-            return jsonify({"error": "Duplicate entry or invalid data"}), 400
+            raise HTTPException(status_code=400, detail="Duplicate entry or invalid data")
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            raise HTTPException(status_code=500, detail=str(e))
 
 # Function to delete an election
-@app.route('/elections/<int:election_id>', methods=['DELETE'])
-def delete_election(election_id):
+@app.delete("/elections/{election_id}")
+def delete_election(election_id: int):
     if election_id <= 0:
-        return jsonify({"error": "Invalid election_id. It must be a positive integer."}), 400
+        raise HTTPException(status_code=400, detail="Invalid election_id. It must be a positive integer.")
 
     with create_connection() as conn:
         try:
@@ -625,25 +591,19 @@ def delete_election(election_id):
             conn.commit()
 
             if cursor.rowcount == 0:
-                return jsonify({"error": "Election not found"}), 404
+                raise HTTPException(status_code=404, detail="Election not found")
 
-            return jsonify({"message": "Election deleted successfully!"}), 200
+            return {"message": "Election deleted successfully!"}
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            raise HTTPException(status_code=500, detail=str(e))
 
 # Function to update an admin
-@app.route('/admin/<int:admin_id>', methods=['PUT'])
-def update_admin(admin_id):
+@app.put("/admin/{admin_id}")
+def update_admin(admin_id: int, admin: Admin):
     if admin_id <= 0:
-        return jsonify({"error": "Invalid admin_id. It must be a positive integer."}), 400
+        raise HTTPException(status_code=400, detail="Invalid admin_id. It must be a positive integer.")
 
-    data = request.get_json()
-    updatable_fields = ["AdminName", "Email", "Password", "Privileges"]
-    missing_fields = [field for field in updatable_fields if field not in data or data[field] == ""]
-    if missing_fields:
-        return jsonify({"error": f"Missing or empty fields: {', '.join(missing_fields)}"}), 400
-
-    hashed_password = hash_password(data['Password']) if len(data['Password']) < 50 else data['Password']
+    hashed_password = hash_password(admin.Password) if len(admin.Password) < 50 else admin.Password
 
     with create_connection() as conn:
         try:
@@ -654,24 +614,24 @@ def update_admin(admin_id):
                 WHERE AdminID = %s
             '''
             cursor.execute(query, (
-                data['AdminName'], data['Email'], hashed_password, data['Privileges'], admin_id
+                admin.AdminName, admin.Email, hashed_password, admin.Privileges, admin_id
             ))
             conn.commit()
 
             if cursor.rowcount == 0:
-                return jsonify({"error": "Admin not found or no changes made"}), 404
+                raise HTTPException(status_code=404, detail="Admin not found or no changes made")
 
-            return jsonify({"message": "Admin updated successfully!"}), 200
+            return {"message": "Admin updated successfully!"}
         except psycopg2.IntegrityError:
-            return jsonify({"error": "Duplicate entry or invalid data"}), 400
+            raise HTTPException(status_code=400, detail="Duplicate entry or invalid data")
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            raise HTTPException(status_code=500, detail=str(e))
 
 # Function to delete an admin
-@app.route('/admin/<int:admin_id>', methods=['DELETE'])
-def delete_admin(admin_id):
+@app.delete("/admin/{admin_id}")
+def delete_admin(admin_id: int):
     if admin_id <= 0:
-        return jsonify({"error": "Invalid admin_id. It must be a positive integer."}), 400
+        raise HTTPException(status_code=400, detail="Invalid admin_id. It must be a positive integer.")
 
     with create_connection() as conn:
         try:
@@ -681,17 +641,17 @@ def delete_admin(admin_id):
             conn.commit()
 
             if cursor.rowcount == 0:
-                return jsonify({"error": "Admin not found"}), 404
+                raise HTTPException(status_code=404, detail="Admin not found")
 
-            return jsonify({"message": "Admin deleted successfully!"}), 200
+            return {"message": "Admin deleted successfully!"}
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            raise HTTPException(status_code=500, detail=str(e))
 
 # Function to retrieve election results sorted by vote count
-@app.route('/election_results/<int:election_id>', methods=['GET'])
-def get_election_results(election_id):
+@app.get("/election_results/{election_id}")
+def get_election_results(election_id: int):
     if election_id <= 0:
-        return jsonify({"error": "Invalid ElectionID. It must be a positive integer."}), 400
+        raise HTTPException(status_code=400, detail="Invalid ElectionID. It must be a positive integer.")
 
     with create_connection() as conn:
         try:
@@ -708,7 +668,7 @@ def get_election_results(election_id):
             results = cursor.fetchall()
 
             if not results:
-                return jsonify({"error": "No results found"}), 404
+                raise HTTPException(status_code=404, detail="No results found")
 
             formatted_results = []
             for row in results:
@@ -720,22 +680,15 @@ def get_election_results(election_id):
                     "ElectionID": row[6]
                 })
 
-            return jsonify(formatted_results), 200
-
+            return formatted_results
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            raise HTTPException(status_code=500, detail=str(e))
 
 # Function to update a vote
-@app.route('/votes/<int:vote_id>', methods=['PUT'])
-def update_vote(vote_id):
+@app.put("/votes/{vote_id}")
+def update_vote(vote_id: int, vote: Vote):
     if vote_id <= 0:
-        return jsonify({"error": "Invalid voteID. It must be a positive integer."}), 400
-
-    data = request.get_json()
-    updatable_fields = ["ElectionDate", "CandidateID", "ElectionID"]
-    missing_fields = [field for field in updatable_fields if field not in data or data[field] == ""]
-    if missing_fields:
-        return jsonify({"error": f"Missing or empty fields: {', '.join(missing_fields)}"}), 400
+        raise HTTPException(status_code=400, detail="Invalid voteID. It must be a positive integer.")
 
     with create_connection() as conn:
         try:
@@ -743,27 +696,23 @@ def update_vote(vote_id):
             query = '''UPDATE Votes SET ElectionDate = %s, CandidateID = %s, ElectionID = %s
                     WHERE VoteID = %s'''
             cursor.execute(query, (
-                data['ElectionDate'], data['CandidateID'], data['ElectionID'], vote_id
+                vote.ElectionDate, vote.CandidateID, vote.ElectionID, vote_id
             ))
 
             conn.commit()
 
             if cursor.rowcount == 0:
-                return jsonify({"error": "Vote not found or no changes made"}), 404
+                raise HTTPException(status_code=404, detail="Vote not found or no changes made")
 
-            return jsonify({"message": "Vote updated successfully!"}), 200
+            return {"message": "Vote updated successfully!"}
         except psycopg2.IntegrityError:
-            return jsonify({"error": "Duplicate entry or invalid data"}), 400
+            raise HTTPException(status_code=400, detail="Duplicate entry or invalid data")
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            raise HTTPException(status_code=500, detail=str(e))
 
 # Function to login
-@app.route('/login', methods=['POST'])
-def login():
-    data = request.get_json()
-    national_id = data['national_id']
-    password = data['password']
-
+@app.post("/login")
+def login(national_id: str, password: str):
     connection = create_connection()
     cursor = connection.cursor()
 
@@ -786,23 +735,18 @@ def login():
             voter_id = result[0]
             HasVoted = result[1]
 
-            return jsonify({"message": "Login successful!", "voter_id": voter_id, "HasVoted": HasVoted, "election_id": election_id}), 200
+            return {"message": "Login successful!", "voter_id": voter_id, "HasVoted": HasVoted, "election_id": election_id}
         else:
-            return jsonify({"message": "خطاء في الرقم الوطني او كلمة السر"}), 401
+            raise HTTPException(status_code=401, detail="خطاء في الرقم الوطني او كلمة السر")
 
     except psycopg2.Error as e:
-        return jsonify({"message": str(e)}), 500
-
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         connection.close()
 
 # Function to login as admin
-@app.route('/login_admin', methods=['POST'])
-def login_admin():
-    data = request.get_json()
-    Email = data['Email']
-    password = data['password']
-
+@app.post("/login_admin")
+def login_admin(Email: str, password: str):
     connection = create_connection()
     cursor = connection.cursor()
 
@@ -817,24 +761,17 @@ def login_admin():
 
         if result:
             Privileges = result[0]
-            return jsonify({"message": "Login successful!", "Privileges": Privileges}), 200
+            return {"message": "Login successful!", "Privileges": Privileges}
         else:
-            return jsonify({"message": "خطاء في الرقم الوطني او كلمة السر"}), 401
+            raise HTTPException(status_code=401, detail="خطاء في الرقم الوطني او كلمة السر")
 
     except psycopg2.Error as e:
-        return jsonify({"message": str(e)}), 500
-
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         connection.close()
 
-@app.route('/castVote', methods=['POST'])
-def castVote():
-    data = request.get_json()
-    voter_id = data['voter_id']
-    election_id = data['election_id']
-    candidate_id = data['candidate_id']
-    date = data['date']
-
+@app.post("/castVote")
+def castVote(voter_id: int, election_id: int, candidate_id: int, date: str):
     connection = create_connection()
     cursor = connection.cursor()
 
@@ -843,10 +780,10 @@ def castVote():
         cursor.execute("SELECT HasVoted FROM Voters WHERE VoterID = %s", (voter_id,))
         voter = cursor.fetchone()
         if not voter:
-            return jsonify({"error": "Voter not found"}), 404
+            raise HTTPException(status_code=404, detail="Voter not found")
 
         if voter[0]:  # If the voter has already voted
-            return jsonify({"error": "Voter has already voted"}), 400
+            raise HTTPException(status_code=400, detail="Voter has already voted")
 
         # 2. Insert the vote
         cursor.execute("""
@@ -880,17 +817,15 @@ def castVote():
         """, (voter_id,))
 
         connection.commit()
-        return jsonify({"message": "Vote recorded successfully"}), 200
-
+        return {"message": "Vote recorded successfully"}
     except psycopg2.Error as e:
         connection.rollback()
-        print(f"Database error: {e}")  # Log the error
-        return jsonify({"error": str(e)}), 500
-
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         connection.close()
 
 # Run the server
 if __name__ == '__main__':
     create_tables()  # Create tables when the application starts
-    app.run(debug=False, host='0.0.0.0')
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
