@@ -880,7 +880,7 @@ def castVote():
         """, (voter_id,))
 
         connection.commit()
-        return jsonify({"message": "Vote recorded successfully"}), 201
+        return jsonify({"message": "Vote recorded successfully"}), 200
 
     except psycopg2.Error as e:
         connection.rollback()
