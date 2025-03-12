@@ -848,11 +848,13 @@ def castVote():
         if voter[0]:  # If the voter has already voted
             return jsonify({"error": "Voter has already voted"}), 400
 
+        # 2. Insert the vote
         cursor.execute("""
-            INSERT INTO Votes (VoterID, ElectionID, CandidateID, ElectionDate )
+            INSERT INTO Votes (VoterID, ElectionID, CandidateID, ElectionDate)
             VALUES (%s, %s, %s, %s)
         """, (voter_id, election_id, candidate_id, date))
 
+        # 3. Update the vote count in Results
         cursor.execute("""
             SELECT CountVotes FROM Results
             WHERE ElectionID = %s AND CandidateID = %s
@@ -866,13 +868,14 @@ def castVote():
             """, (election_id, candidate_id))
         else:
             cursor.execute("""
-                INSERT INTO Results (ElectionID, CandidateID, CountVotes, ResultDate )
+                INSERT INTO Results (ElectionID, CandidateID, CountVotes, ResultDate)
                 VALUES (%s, %s, 1, %s)
             """, (election_id, candidate_id, date))
 
+        # 4. Update the voter's status
         cursor.execute("""
             UPDATE Voters
-            SET HasVoted = 1
+            SET HasVoted = TRUE
             WHERE VoterID = %s
         """, (voter_id,))
 
@@ -881,6 +884,7 @@ def castVote():
 
     except psycopg2.Error as e:
         connection.rollback()
+        print(f"Database error: {e}")  # Log the error
         return jsonify({"error": str(e)}), 500
 
     finally:
