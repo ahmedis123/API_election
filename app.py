@@ -9,20 +9,20 @@ app = FastAPI()
 
 # Database connection function
 def create_connection():
-    connection = None
-    try:
-        connection = psycopg2.connect(
-            host="aws-0-eu-central-1.pooler.supabase.com",
-            port="6543",
-            database="postgres",
-            user="postgres.frzhxdxupmnuozfwnjcg",
-            password="Ahmedis123@a"  # Ensure the password is correct
-        )
-        print("Database connection successful")
-    except Error as e:
-        print(f"Error connecting to the database: {e}")
-    
-    return connection
+      connection = None
+      try:
+          connection = psycopg2.connect(
+              host="aws-0-eu-central-1.pooler.supabase.com",
+              port="6543",
+              database="postgres",
+              user="postgres.frzhxdxupmnuozfwnjcg",
+              password="Ahmedis123@a"
+          )
+          print("Database connection successful")
+          return connection
+      except Error as e:
+          print(f"Error connecting to the database: {e}")
+          raise HTTPException(status_code=500, detail="Failed to connect to the database")
 
 # Password hashing function
 def hash_password(password: str) -> str:
@@ -712,17 +712,17 @@ def update_vote(vote_id: int, vote: Vote):
 
 # Function to login
 @app.post("/login")
-def login(national_id: str, password: str):
+def login(voter: VoterLogin):
     connection = create_connection()
     cursor = connection.cursor()
 
     try:
-        hashed_password = hash_password(password)
+        hashed_password = hash_password(voter.password)
 
         cursor.execute('''
             SELECT VoterID, HasVoted FROM Voters
             WHERE NationalID = %s AND Password = %s
-        ''', (national_id, hashed_password))
+        ''', (voter.national_id, hashed_password))
         result = cursor.fetchone()
 
         if result:
@@ -744,26 +744,25 @@ def login(national_id: str, password: str):
     finally:
         connection.close()
 
-# Function to login as admin
 @app.post("/login_admin")
-def login_admin(Email: str, password: str):
+def login_admin(admin: AdminLogin):
     connection = create_connection()
     cursor = connection.cursor()
 
     try:
-        hashed_password = hash_password(password)
+        hashed_password = hash_password(admin.password)
 
         cursor.execute('''
             SELECT Privileges FROM Admins
             WHERE Email = %s AND Password = %s
-        ''', (Email, hashed_password))
+        ''', (admin.Email, hashed_password))
         result = cursor.fetchone()
 
         if result:
             Privileges = result[0]
             return {"message": "Login successful!", "Privileges": Privileges}
         else:
-            raise HTTPException(status_code=401, detail="خطاء في الرقم الوطني او كلمة السر")
+            raise HTTPException(status_code=401, detail="خطاء في البريد الإلكتروني او كلمة السر")
 
     except psycopg2.Error as e:
         raise HTTPException(status_code=500, detail=str(e))
