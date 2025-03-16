@@ -690,40 +690,70 @@ def delete_admin(admin_id):
 # Function to retrieve election results sorted by vote count
 @app.route('/election_results/<int:election_id>', methods=['GET'])
 def get_election_results(election_id):
+    # التحقق من صحة election_id
     if election_id <= 0:
-        return jsonify({"error": "Invalid ElectionID. It must be a positive integer."}), 400
+        return jsonify({
+            "error": "معرّف الانتخابات غير صالح. يجب أن يكون رقمًا موجبًا."
+        }), 400
 
     with create_connection() as conn:
+        cursor = None
         try:
-            cursor = conn.cursor()
-
-            query = '''
-                SELECT *
-                FROM Candidates AS c
-                INNER JOIN Results AS r ON c.CandidateID = r.CandidateID
+            cursor = conn.cursor(dictionary=True)  # تمكين الوصول عبر أسماء الأعمدة
+            
+            # استعلام مؤكد للحصول على النتائج المحددة
+            election_query = '''
+                SELECT 
+                    c.CandidateID,
+                    c.CandidateName,
+                    c.PartyName,
+                    r.CountVotes,
+                    r.ElectionID
+                FROM Candidates c
+                INNER JOIN Results r 
+                    ON c.CandidateID = r.CandidateID
                 WHERE r.ElectionID = %s
+                ORDER BY r.CountVotes DESC  # ترتيب النتائج تنازليًا حسب الأصوات
             '''
-            cursor.execute(query, (election_id,))
+            cursor.execute(election_query, (election_id,))
+            
+            election_results = cursor.fetchall()
+            
+            if not election_results:
+                return jsonify({
+                    "message": "لم يتم العثور على نتائج للانتخابات المحددة."
+                }), 404
+            
+            # بناء الهيكل التنسيقي للنتائج
+            return jsonify([
+                {
+                    "election_id": result["ElectionID"],
+                    "candidate_id": result["CandidateID"],
+                    "candidate_name": result["CandidateName"],
+                    "party": result["PartyName"],
+                    "votes": result["CountVotes"]
+                }
+                for result in election_results
+            ]), 200
 
-            results = cursor.fetchall()
-
-            if not results:
-                return jsonify({"error": "No results found"}), 404
-
-            formatted_results = []
-            for row in results:
-                formatted_results.append({
-                    "CandidateID": row[0],
-                    "CandidateName": row[2],
-                    "PartyName": row[3],
-                    "CountVotes": row[8],
-                    "ElectionID": row[6]
-                })
-
-            return jsonify(formatted_results), 200
-
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
+        except mysql.connector.Error as db_error:
+            # تسجيل الخطأ للتصحيح
+            app.logger.error(f"خطأ في قاعدة البيانات: {db_error}")
+            return jsonify({
+                "error": "حدث خطأ أثناء استرداد النتائج."
+            }), 500
+            
+        except Exception as general_error:
+            # التعامل مع الأخطاء غير المتوقعة
+            app.logger.error(f"خطأ غير متوقع: {general_error}")
+            return jsonify({
+                "error": "حدث خطأ داخلي في الخادم."
+            }), 500
+            
+        finally:
+            # التأكد من إغلاق المؤشر
+            if cursor is not None:
+                cursor.close()
 
 # Function to update a vote
 @app.route('/votes/<int:vote_id>', methods=['PUT'])
