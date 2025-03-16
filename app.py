@@ -688,7 +688,6 @@ def delete_admin(admin_id):
             return jsonify({"error": str(e)}), 500
 
 # Function to retrieve election results sorted by vote count
-
 @app.route('/election_results/<int:election_id>', methods=['GET'])
 def get_election_results(election_id):
     if election_id <= 0:
@@ -700,23 +699,23 @@ def get_election_results(election_id):
 
     try:
         with conn.cursor() as cursor:
-            # تحقق من وجود الانتخابات باستخدام العمود الصحيح
-            cursor.execute("SELECT election_id FROM elections WHERE election_id = %s", (election_id,))
+            # التحقق من وجود الانتخابات باستخدام اسم العمود الصحيح (ElectionID)
+            cursor.execute("SELECT ElectionID FROM Elections WHERE ElectionID = %s", (election_id,))
             if not cursor.fetchone():
                 return jsonify({"error": "الانتخابات غير موجودة"}), 404
 
-            # استعلم عن النتائج
+            # استعلام النتائج مع الأسماء الصحيحة للأعمدة
             query = """
                 SELECT 
-                    c.candidate_id,
-                    c.candidate_name,
-                    c.party_name,
-                    r.vote_count,
-                    r.election_id
-                FROM results r
-                INNER JOIN candidates c ON r.candidate_id = c.candidate_id
-                WHERE r.election_id = %s
-                ORDER BY r.vote_count DESC
+                    c.CandidateID,
+                    c.CandidateName,
+                    c.PartyName,
+                    r.CountVotes,
+                    r.ElectionID
+                FROM Results r
+                INNER JOIN Candidates c ON r.CandidateID = c.CandidateID
+                WHERE r.ElectionID = %s
+                ORDER BY r.CountVotes DESC
             """
             cursor.execute(query, (election_id,))
             results = cursor.fetchall()
@@ -724,7 +723,18 @@ def get_election_results(election_id):
             if not results:
                 return jsonify({"message": "لا توجد نتائج متاحة"}), 200
 
-            return jsonify([dict(row) for row in results]), 200
+            # تحويل النتائج إلى قاموس باستخدام أسماء الأعمدة الصحيحة
+            formatted_results = []
+            for row in results:
+                formatted_results.append({
+                    "CandidateID": row[0],
+                    "CandidateName": row[1],
+                    "PartyName": row[2],
+                    "CountVotes": row[3],
+                    "ElectionID": row[4]
+                })
+
+            return jsonify(formatted_results), 200
 
     except psycopg2.DatabaseError as e:
         app.logger.error(f"خطأ قاعدة البيانات: {str(e)}")
@@ -735,8 +745,6 @@ def get_election_results(election_id):
     finally:
         if conn:
             conn.close()
-            app.logger.info("تم إغلاق الاتصال")
-
 
 # Function to update a vote
 @app.route('/votes/<int:vote_id>', methods=['PUT'])
