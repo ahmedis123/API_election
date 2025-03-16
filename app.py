@@ -699,12 +699,12 @@ def get_election_results(election_id):
 
     try:
         with conn.cursor() as cursor:
-            # التحقق من وجود الانتخابات باستخدام اسم العمود الصحيح (ElectionID)
+            # 1. التحقق من وجود الانتخابات
             cursor.execute("SELECT ElectionID FROM Elections WHERE ElectionID = %s", (election_id,))
             if not cursor.fetchone():
                 return jsonify({"error": "الانتخابات غير موجودة"}), 404
 
-            # استعلام النتائج مع الأسماء الصحيحة للأعمدة
+            # 2. جلب النتائج مع التحقق من ارتباط المرشح بالانتخابات
             query = """
                 SELECT 
                     c.CandidateID,
@@ -713,26 +713,29 @@ def get_election_results(election_id):
                     r.CountVotes,
                     r.ElectionID
                 FROM Results r
-                INNER JOIN Candidates c ON r.CandidateID = c.CandidateID
+                INNER JOIN Candidates c 
+                    ON r.CandidateID = c.CandidateID 
+                    AND c.ElectionID = %s  -- <-- الشرط الجديد
                 WHERE r.ElectionID = %s
                 ORDER BY r.CountVotes DESC
             """
-            cursor.execute(query, (election_id,))
+            cursor.execute(query, (election_id, election_id))
             results = cursor.fetchall()
 
             if not results:
-                return jsonify({"message": "لا توجد نتائج متاحة"}), 200
+                return jsonify({"message": "لا توجد نتائج متاحة لهذه الانتخابات"}), 200
 
-            # تحويل النتائج إلى قاموس باستخدام أسماء الأعمدة الصحيحة
-            formatted_results = []
-            for row in results:
-                formatted_results.append({
+            # تحويل النتائج إلى تنسيق JSON
+            formatted_results = [
+                {
                     "CandidateID": row[0],
                     "CandidateName": row[1],
                     "PartyName": row[2],
                     "CountVotes": row[3],
                     "ElectionID": row[4]
-                })
+                }
+                for row in results
+            ]
 
             return jsonify(formatted_results), 200
 
@@ -745,7 +748,7 @@ def get_election_results(election_id):
     finally:
         if conn:
             conn.close()
-
+            
 # Function to update a vote
 @app.route('/votes/<int:vote_id>', methods=['PUT'])
 def update_vote(vote_id):
