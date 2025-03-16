@@ -688,58 +688,56 @@ def delete_admin(admin_id):
             return jsonify({"error": str(e)}), 500
 
 # Function to retrieve election results sorted by vote count
+
 @app.route('/election_results/<int:election_id>', methods=['GET'])
 def get_election_results(election_id):
-    # التحقق من صحة election_id
     if election_id <= 0:
         return jsonify({"error": "معرّف الانتخابات غير صالح"}), 400
 
-    # إنشاء الاتصال
     conn = create_connection()
     if not conn:
-        return jsonify({"error": "تعذر الاتصال بالنظام"}), 500
+        return jsonify({"error": "تعذر الاتصال بالخادم"}), 500
 
     try:
         with conn.cursor() as cursor:
-            # التحقق من وجود الانتخابات
-            cursor.execute("SELECT 1 FROM elections WHERE id = %s", (election_id,))
+            # تحقق من وجود الانتخابات باستخدام العمود الصحيح
+            cursor.execute("SELECT election_id FROM elections WHERE election_id = %s", (election_id,))
             if not cursor.fetchone():
                 return jsonify({"error": "الانتخابات غير موجودة"}), 404
 
-            # استعلام النتائج المفصّل
+            # استعلم عن النتائج
             query = """
                 SELECT 
-                    c.candidateid AS id,
-                    c.candidatename AS name,
-                    c.partyname AS party,
-                    r.countvotes AS votes,
-                    TO_CHAR(r.last_updated, 'YYYY-MM-DD HH24:MI') AS timestamp
+                    c.candidate_id,
+                    c.candidate_name,
+                    c.party_name,
+                    r.vote_count,
+                    r.election_id
                 FROM results r
-                INNER JOIN candidates c ON r.candidateid = c.candidateid
-                WHERE r.electionid = %s
-                ORDER BY r.countvotes DESC
+                INNER JOIN candidates c ON r.candidate_id = c.candidate_id
+                WHERE r.election_id = %s
+                ORDER BY r.vote_count DESC
             """
             cursor.execute(query, (election_id,))
             results = cursor.fetchall()
 
             if not results:
-                return jsonify({"message": "لم يتم تسجيل أي أصوات بعد"}), 200
+                return jsonify({"message": "لا توجد نتائج متاحة"}), 200
 
             return jsonify([dict(row) for row in results]), 200
 
     except psycopg2.DatabaseError as e:
-        app.logger.error(f"خطأ قاعدة بيانات: {str(e)}")
-        return jsonify({"error": "فشل في معالجة الطلب"}), 500
-
+        app.logger.error(f"خطأ قاعدة البيانات: {str(e)}")
+        return jsonify({"error": "خطأ في معالجة البيانات"}), 500
     except Exception as e:
         app.logger.error(f"خطأ غير متوقع: {str(e)}")
-        return jsonify({"error": "حدث عطل فني"}), 500
-
+        return jsonify({"error": "خطأ داخلي"}), 500
     finally:
         if conn:
             conn.close()
             app.logger.info("تم إغلاق الاتصال")
-            
+
+
 # Function to update a vote
 @app.route('/votes/<int:vote_id>', methods=['PUT'])
 def update_vote(vote_id):
