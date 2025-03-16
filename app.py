@@ -690,49 +690,56 @@ def delete_admin(admin_id):
 # Function to retrieve election results sorted by vote count
 @app.route('/election_results/<int:election_id>', methods=['GET'])
 def get_election_results(election_id):
+    # التحقق من صحة election_id
     if election_id <= 0:
         return jsonify({"error": "معرّف الانتخابات غير صالح"}), 400
 
+    # إنشاء الاتصال
     conn = create_connection()
     if not conn:
-        return jsonify({"error": "تعذر الاتصال بقاعدة البيانات"}), 500
+        return jsonify({"error": "تعذر الاتصال بالنظام"}), 500
 
     try:
         with conn.cursor() as cursor:
-            query = '''
+            # التحقق من وجود الانتخابات
+            cursor.execute("SELECT 1 FROM elections WHERE id = %s", (election_id,))
+            if not cursor.fetchone():
+                return jsonify({"error": "الانتخابات غير موجودة"}), 404
+
+            # استعلام النتائج المفصّل
+            query = """
                 SELECT 
                     c.candidateid AS id,
                     c.candidatename AS name,
                     c.partyname AS party,
                     r.countvotes AS votes,
-                    r.electionid
-                FROM candidates c
-                INNER JOIN results r 
-                    ON c.candidateid = r.candidateid
+                    TO_CHAR(r.last_updated, 'YYYY-MM-DD HH24:MI') AS timestamp
+                FROM results r
+                INNER JOIN candidates c ON r.candidateid = c.candidateid
                 WHERE r.electionid = %s
                 ORDER BY r.countvotes DESC
-            '''
+            """
             cursor.execute(query, (election_id,))
             results = cursor.fetchall()
 
             if not results:
-                return jsonify({"message": "لا توجد نتائج"}), 404
+                return jsonify({"message": "لم يتم تسجيل أي أصوات بعد"}), 200
 
             return jsonify([dict(row) for row in results]), 200
 
-    except psycopg2.DatabaseError as db_error:
-        app.logger.error(f"خطأ قاعدة البيانات: {db_error}")
-        return jsonify({"error": "خطأ في معالجة البيانات"}), 500
-        
+    except psycopg2.DatabaseError as e:
+        app.logger.error(f"خطأ قاعدة بيانات: {str(e)}")
+        return jsonify({"error": "فشل في معالجة الطلب"}), 500
+
     except Exception as e:
-        app.logger.error(f"خطأ غير متوقع: {e}")
-        return jsonify({"error": "خطأ داخلي في الخادم"}), 500
-        
+        app.logger.error(f"خطأ غير متوقع: {str(e)}")
+        return jsonify({"error": "حدث عطل فني"}), 500
+
     finally:
         if conn:
             conn.close()
-            app.logger.info("تم إغلاق الاتصال") 
-
+            app.logger.info("تم إغلاق الاتصال")
+            
 # Function to update a vote
 @app.route('/votes/<int:vote_id>', methods=['PUT'])
 def update_vote(vote_id):
