@@ -690,70 +690,44 @@ def delete_admin(admin_id):
 # Function to retrieve election results sorted by vote count
 @app.route('/election_results/<int:election_id>', methods=['GET'])
 def get_election_results(election_id):
-    # التحقق من صحة election_id
     if election_id <= 0:
-        return jsonify({
-            "error": "معرّف الانتخابات غير صالح. يجب أن يكون رقمًا موجبًا."
-        }), 400
+        return jsonify({"error": "معرّف الانتخابات غير صالح"}), 400
 
-    with create_connection() as conn:
-        cursor = None
-        try:
-            cursor = conn.cursor(dictionary=True)  # تمكين الوصول عبر أسماء الأعمدة
-            
-            # استعلام مؤكد للحصول على النتائج المحددة
-            election_query = '''
-                SELECT 
-                    c.CandidateID,
-                    c.CandidateName,
-                    c.PartyName,
-                    r.CountVotes,
-                    r.ElectionID
-                FROM Candidates c
-                INNER JOIN Results r 
-                    ON c.CandidateID = r.CandidateID
-                WHERE r.ElectionID = %s
-                ORDER BY r.CountVotes DESC  # ترتيب النتائج تنازليًا حسب الأصوات
+    try:
+        conn = psycopg2.connect(
+            dbname="your_db",
+            user="your_user",
+            password="your_pass",
+            host="your_host"
+        )
+        with conn.cursor(cursor_factory=extras.DictCursor) as cursor:
+            query = '''
+                SELECT c.candidateid, c.candidatename, c.partyname, 
+                       r.countvotes, r.electionid
+                FROM candidates c
+                INNER JOIN results r ON c.candidateid = r.candidateid
+                WHERE r.electionid = %s
+                ORDER BY r.countvotes DESC
             '''
-            cursor.execute(election_query, (election_id,))
-            
-            election_results = cursor.fetchall()
-            
-            if not election_results:
-                return jsonify({
-                    "message": "لم يتم العثور على نتائج للانتخابات المحددة."
-                }), 404
-            
-            # بناء الهيكل التنسيقي للنتائج
-            return jsonify([
-                {
-                    "election_id": result["ElectionID"],
-                    "candidate_id": result["CandidateID"],
-                    "candidate_name": result["CandidateName"],
-                    "party": result["PartyName"],
-                    "votes": result["CountVotes"]
-                }
-                for result in election_results
-            ]), 200
+            cursor.execute(query, (election_id,))
+            results = cursor.fetchall()
 
-        except mysql.connector.Error as db_error:
-            # تسجيل الخطأ للتصحيح
-            app.logger.error(f"خطأ في قاعدة البيانات: {db_error}")
-            return jsonify({
-                "error": "حدث خطأ أثناء استرداد النتائج."
-            }), 500
-            
-        except Exception as general_error:
-            # التعامل مع الأخطاء غير المتوقعة
-            app.logger.error(f"خطأ غير متوقع: {general_error}")
-            return jsonify({
-                "error": "حدث خطأ داخلي في الخادم."
-            }), 500
-            
-        finally:
-            # التأكد من إغلاق المؤشر
-            if cursor is not None:
-                cursor.close()
+            if not results:
+                return jsonify({"message": "لا توجد نتائج"}), 404
+
+            return jsonify([dict(row) for row in results]), 200
+
+    except psycopg2.Error as db_error:
+        app.logger.error(f"خطأ قاعدة البيانات: {db_error}")
+        return jsonify({"error": "خطأ في قاعدة البيانات"}), 500
+        
+    except Exception as e:
+        app.logger.error(f"خطأ غير متوقع: {e}")
+        return jsonify({"error": "خطأ داخلي"}), 500
+        
+    finally:
+        if 'conn' in locals():
+            conn.close()
 
 # Function to update a vote
 @app.route('/votes/<int:vote_id>', methods=['PUT'])
