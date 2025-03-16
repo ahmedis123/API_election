@@ -693,19 +693,22 @@ def get_election_results(election_id):
     if election_id <= 0:
         return jsonify({"error": "معرّف الانتخابات غير صالح"}), 400
 
+    conn = create_connection()
+    if not conn:
+        return jsonify({"error": "تعذر الاتصال بقاعدة البيانات"}), 500
+
     try:
-        conn = psycopg2.connect(
-            dbname="your_db",
-            user="your_user",
-            password="your_pass",
-            host="your_host"
-        )
-        with conn.cursor(cursor_factory=extras.DictCursor) as cursor:
+        with conn.cursor() as cursor:
             query = '''
-                SELECT c.candidateid, c.candidatename, c.partyname, 
-                       r.countvotes, r.electionid
+                SELECT 
+                    c.candidateid AS id,
+                    c.candidatename AS name,
+                    c.partyname AS party,
+                    r.countvotes AS votes,
+                    r.electionid
                 FROM candidates c
-                INNER JOIN results r ON c.candidateid = r.candidateid
+                INNER JOIN results r 
+                    ON c.candidateid = r.candidateid
                 WHERE r.electionid = %s
                 ORDER BY r.countvotes DESC
             '''
@@ -717,17 +720,18 @@ def get_election_results(election_id):
 
             return jsonify([dict(row) for row in results]), 200
 
-    except psycopg2.Error as db_error:
+    except psycopg2.DatabaseError as db_error:
         app.logger.error(f"خطأ قاعدة البيانات: {db_error}")
-        return jsonify({"error": "خطأ في قاعدة البيانات"}), 500
+        return jsonify({"error": "خطأ في معالجة البيانات"}), 500
         
     except Exception as e:
         app.logger.error(f"خطأ غير متوقع: {e}")
-        return jsonify({"error": "خطأ داخلي"}), 500
+        return jsonify({"error": "خطأ داخلي في الخادم"}), 500
         
     finally:
-        if 'conn' in locals():
+        if conn:
             conn.close()
+            app.logger.info("تم إغلاق الاتصال") 
 
 # Function to update a vote
 @app.route('/votes/<int:vote_id>', methods=['PUT'])
