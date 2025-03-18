@@ -106,7 +106,8 @@ def castVote():
         # التحقق من حالة الناخب
         cursor.execute(
             "SELECT HasVoted FROM Voters WHERE VoterID = %s",
-            (data['voter_id'],)
+            (data['voter_id'],)  # <-- Fixed: Added closing parenthesis
+        )
         voter = cursor.fetchone()
         
         if not voter:
@@ -135,7 +136,8 @@ def castVote():
         # تحديث حالة الناخب
         cursor.execute(
             "UPDATE Voters SET HasVoted = TRUE WHERE VoterID = %s",
-            (data['voter_id'],)
+            (data['voter_id'],)  # <-- Fixed: Added closing parenthesis
+        )
         
         conn.commit()
         return jsonify({"message": "تم تسجيل التصويت بنجاح"}), 200
