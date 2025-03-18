@@ -1,50 +1,57 @@
 from flask import Flask, request, jsonify
-import psycopg2
-from psycopg2 import Error
+from psycopg2 import pool, Error
 import hashlib
 import logging
 
+# تهيئة التطبيق
 app = Flask(__name__)
 
 # تكوين نظام التسجيل
-logging.basicConfig(
-    level=logging.WARNING,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('election_system.log'),
-        logging.StreamHandler()
-    ]
-)
+logging.basicConfig(level=logging.WARNING)  # تسجيل التحذيرات والأخطاء فقط
+logger = logging.getLogger(__name__)
 
-# وظيفة الاتصال بقاعدة البيانات
-def create_connection():
-    connection = None
+# تهيئة بركة الاتصالات
+postgreSQL_pool = None
+
+def initialize_pool():
+    global postgreSQL_pool
     try:
-        connection = psycopg2.connect(
+        postgreSQL_pool = pool.SimpleConnectionPool(
+            1,  # أقل عدد من الاتصالات
+            20,  # أقصى عدد من الاتصالات
             host="aws-0-eu-central-1.pooler.supabase.com",
             port="6543",
             database="postgres",
             user="postgres.frzhxdxupmnuozfwnjcg",
             password="Ahmedis123@a"
         )
-        logging.info("تم الاتصال بقاعدة البيانات بنجاح")
+        logger.info("تم تهيئة بركة الاتصالات بنجاح")
     except Error as e:
-        logging.error("خطأ في الاتصال بقاعدة البيانات: %s", e)
-    
-    return connection
+        logger.error(f"خطأ في تهيئة بركة الاتصالات: {e}")
 
-# تشفير كلمة المرور
-def hash_password(password):
+# وظيفة الحصول على اتصال من البركة
+def create_connection():
     try:
-        return hashlib.sha256((password + "Elction").encode()).hexdigest()
-    except Exception as e:
-        logging.error("خطأ في تشفير كلمة المرور: %s", e)
-        raise
+        if postgreSQL_pool:
+            connection = postgreSQL_pool.getconn()
+            logger.info("تم الحصول على اتصال من البركة")
+            return connection
+        else:
+            logger.error("بركة الاتصالات غير مهيأة")
+            return None
+    except Error as e:
+        logger.error(f"خطأ في الحصول على اتصال: {e}")
+        return None
 
-# إنشاء الجداول (مع تصحيح المسافات البادئة)
+# وظيفة تشفير كلمة المرور
+def hash_password(password):
+    combined = password + "Elction"
+    return hashlib.sha256(combined.encode()).hexdigest()
+
+# وظيفة إنشاء الجداول
 def create_tables():
     with create_connection() as connection:
-        if connection is not None:
+        if connection:
             cursor = connection.cursor()
             try:
                 # إنشاء جدول الانتخابات
@@ -54,7 +61,7 @@ def create_tables():
                                     ElectionType TEXT,
                                     ElectionStatus TEXT
                                 )''')
-                logging.info("تم إنشاء جدول الانتخابات")
+                logger.info("تم إنشاء جدول الانتخابات")
 
                 # إنشاء جدول الناخبين
                 cursor.execute('''CREATE TABLE IF NOT EXISTS Voters (
@@ -69,87 +76,155 @@ def create_tables():
                                     Password TEXT,
                                     Phone TEXT UNIQUE
                                 )''')
-                logging.info("تم إنشاء جدول الناخبين")
+                logger.info("تم إنشاء جدول الناخبين")
 
-                # ... (بقية الجداول بنفس النمط)
+                # إنشاء جدول المرشحين
+                cursor.execute('''CREATE TABLE IF NOT EXISTS Candidates (
+                                    CandidateID SERIAL PRIMARY KEY,
+                                    NationalID TEXT UNIQUE,
+                                    CandidateName TEXT,
+                                    PartyName TEXT,
+                                    Biography TEXT,
+                                    CandidateProgram TEXT,
+                                    ElectionID INTEGER,
+                                    FOREIGN KEY (ElectionID) REFERENCES Elections (ElectionID) ON DELETE CASCADE
+                                )''')
+                logger.info("تم إنشاء جدول المرشحين")
+
+                # إنشاء جدول الأصوات
+                cursor.execute('''CREATE TABLE IF NOT EXISTS Votes (
+                                    VoteID SERIAL PRIMARY KEY,
+                                    VoterID INTEGER,
+                                    ElectionDate TEXT,
+                                    CandidateID INTEGER,
+                                    ElectionID INTEGER,
+                                    FOREIGN KEY (VoterID) REFERENCES Voters (VoterID),
+                                    FOREIGN KEY (CandidateID) REFERENCES Candidates (CandidateID),
+                                    FOREIGN KEY (ElectionID) REFERENCES Elections (ElectionID)
+                                )''')
+                logger.info("تم إنشاء جدول الأصوات")
+
+                # إنشاء جدول النتائج
+                cursor.execute('''CREATE TABLE IF NOT EXISTS Results (
+                                    ResultID SERIAL PRIMARY KEY,
+                                    CountVotes INTEGER,
+                                    CandidateID INTEGER,
+                                    ResultDate TEXT,
+                                    ElectionID INTEGER,
+                                    FOREIGN KEY (CandidateID) REFERENCES Candidates (CandidateID),
+                                    FOREIGN KEY (ElectionID) REFERENCES Elections (ElectionID)
+                                )''')
+                logger.info("تم إنشاء جدول النتائج")
+
+                # إنشاء جدول الإداريين
+                cursor.execute('''CREATE TABLE IF NOT EXISTS Admins (
+                                    AdminID SERIAL PRIMARY KEY,
+                                    AdminName TEXT,
+                                    Email TEXT UNIQUE,
+                                    Password TEXT,
+                                    Privileges TEXT
+                                )''')
+                logger.info("تم إنشاء جدول الإداريين")
 
                 connection.commit()
-                logging.info("تم إنشاء جميع الجداول بنجاح")
-                
+                logger.info("تم إنشاء جميع الجداول بنجاح")
             except Error as e:
-                logging.critical("خطأ في إنشاء الجداول: %s", e)
+                logger.error(f"خطأ في إنشاء الجداول: {e}")
                 connection.rollback()
             finally:
                 cursor.close()
         else:
-            logging.error("فشل في إنشاء الجداول بسبب مشكلة في الاتصال")
+            logger.error("فشل في الاتصال بقاعدة البيانات")
 
-# ... (بقية النقاط بنفس النمط مع التأكد من المسافات البادئة)
-
-@app.route('/castVote', methods=['POST'])
-def castVote():
+# ------------------- الناخبون -------------------
+@app.route('/voters', methods=['POST'])
+def add_voter():
     data = request.get_json()
-    required_fields = ["voter_id", "election_id", "candidate_id", "date"]
+    required_fields = ["NationalID", "VoterName", "State", "Email", "HasVoted", "DateOfBirth", "Gender", "Password", "Phone"]
     
     if not all(field in data for field in required_fields):
-        logging.warning("بيانات تصويت ناقصة")
-        return jsonify({"error": "بيانات مطلوبة مفقودة"}), 400
+        logger.warning("حقول مطلوبة مفقودة في إضافة ناخب")
+        return jsonify({"error": "الحقول المطلوبة مفقودة"}), 400
 
-    conn = create_connection()
-    if not conn:
-        logging.error("فشل التصويت: لا يوجد اتصال")
-        return jsonify({"error": "خطأ في قاعدة البيانات"}), 500
-
-    try:
-        cursor = conn.cursor()
-        
-        # التحقق من حالة الناخب
-        cursor.execute(
-            "SELECT HasVoted FROM Voters WHERE VoterID = %s",
-            (data['voter_id'],)  # <-- Fixed: Added closing parenthesis
-        )
-        voter = cursor.fetchone()
-        
-        if not voter:
-            logging.warning("ناخب غير موجود: %s", data['voter_id'])
-            return jsonify({"error": "الناخب غير موجود"}), 404
+    with create_connection() as conn:
+        if not conn:
+            return jsonify({"error": "فشل الاتصال بقاعدة البيانات"}), 500
             
-        if voter[0]:
-            logging.warning("محاولة تصويت مكررة: %s", data['voter_id'])
-            return jsonify({"error": "تم التصويت مسبقًا"}), 400
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''INSERT INTO Voters (
+                NationalID, VoterName, State, Email, 
+                HasVoted, DateOfBirth, Gender, Password, Phone
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)''', 
+            (
+                data['NationalID'], data['VoterName'], data['State'], 
+                data['Email'], data['HasVoted'], data['DateOfBirth'],
+                data['Gender'], hash_password(data['Password']), data['Phone']
+            ))
+            conn.commit()
+            logger.info(f"تمت إضافة ناخب جديد: {data['NationalID']}")
+            return jsonify({"message": "تمت الإضافة بنجاح"}), 201
+        except Error as e:
+            logger.error(f"خطأ في إضافة ناخب: {e}")
+            return jsonify({"error": "فشل في العملية"}), 500
 
-        # إدخال التصويت
-        cursor.execute(
-            """INSERT INTO Votes (VoterID, ElectionID, CandidateID, ElectionDate)
-            VALUES (%s, %s, %s, %s)""",
-            (data['voter_id'], data['election_id'], 
-             data['candidate_id'], data['date'])
-        )
+# ------------------- تسجيل الدخول -------------------
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    national_id = data.get('national_id')
+    password = data.get('password')
 
-        # تحديث النتائج
-        cursor.execute(
-            """UPDATE Results SET CountVotes = CountVotes + 1 
-            WHERE ElectionID = %s AND CandidateID = %s""",
-            (data['election_id'], data['candidate_id'])
-        )
+    with create_connection() as conn:
+        if not conn:
+            return jsonify({"error": "فشل الاتصال بالخادم"}), 500
 
-        # تحديث حالة الناخب
-        cursor.execute(
-            "UPDATE Voters SET HasVoted = TRUE WHERE VoterID = %s",
-            (data['voter_id'],)  # <-- Fixed: Added closing parenthesis
-        )
-        
-        conn.commit()
-        return jsonify({"message": "تم تسجيل التصويت بنجاح"}), 200
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''SELECT VoterID, HasVoted FROM Voters 
+                           WHERE NationalID = %s AND Password = %s''',
+                           (national_id, hash_password(password)))
+            result = cursor.fetchone()
+            
+            if result:
+                logger.info(f"تسجيل دخول ناجح للناخب: {national_id}")
+                return jsonify({
+                    "voter_id": result[0],
+                    "has_voted": result[1]
+                }), 200
+            else:
+                logger.warning(f"محاولة تسجيل دخول فاشلة: {national_id}")
+                return jsonify({"error": "بيانات غير صحيحة"}), 401
+        except Error as e:
+            logger.error(f"خطأ في تسجيل الدخول: {e}")
+            return jsonify({"error": "خطأ في الخادم"}), 500
 
-    except Error as e:
-        conn.rollback()
-        logging.error("خطأ في التصويت: %s", e)
-        return jsonify({"error": "فشل في العملية"}), 500
-    finally:
-        if conn:
-            conn.close()
+# ------------------- الإداريون -------------------
+@app.route('/admin', methods=['POST'])
+def add_admin():
+    data = request.get_json()
+    required_fields = ["AdminName", "Email", "Password", "Privileges"]
+    
+    if not all(field in data for field in required_fields):
+        return jsonify({"error": "الحقول المطلوبة مفقودة"}), 400
 
+    with create_connection() as conn:
+        cursor = conn.cursor()
+        try:
+            cursor.execute('''INSERT INTO Admins 
+                            (AdminName, Email, Password, Privileges)
+                            VALUES (%s, %s, %s, %s)''',
+                            (data['AdminName'], data['Email'], 
+                             hash_password(data['Password']), data['Privileges']))
+            conn.commit()
+            logger.info(f"تمت إضافة مدير جديد: {data['Email']}")
+            return jsonify({"message": "تمت الإضافة بنجاح"}), 201
+        except Error as e:
+            logger.error(f"خطأ في إضافة مدير: {e}")
+            return jsonify({"error": "فشل في العملية"}), 500
+
+# ------------------- تشغيل التطبيق -------------------
 if __name__ == '__main__':
-    create_tables()
+    initialize_pool()  # تهيئة البركة أولاً
+    create_tables()     # إنشاء الجداول
     app.run(host='0.0.0.0', port=5000, debug=False)
