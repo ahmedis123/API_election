@@ -1,69 +1,49 @@
 from flask import Flask, request, jsonify
-from psycopg2 import pool, Error
+import psycopg2
+from psycopg2 import Error
 import hashlib
-import logging
 
-# تهيئة التطبيق
 app = Flask(__name__)
 
-# تكوين نظام التسجيل
-logging.basicConfig(level=logging.WARNING)  # تسجيل التحذيرات والأخطاء فقط
-logger = logging.getLogger(__name__)
-
-# تهيئة بركة الاتصالات
-postgreSQL_pool = None
-
-def initialize_pool():
-    global postgreSQL_pool
+# Database connection function
+def create_connection():
+    connection = None
     try:
-        postgreSQL_pool = pool.SimpleConnectionPool(
-            1,  # أقل عدد من الاتصالات
-            20,  # أقصى عدد من الاتصالات
+        connection = psycopg2.connect(
             host="aws-0-eu-central-1.pooler.supabase.com",
             port="6543",
             database="postgres",
             user="postgres.frzhxdxupmnuozfwnjcg",
-            password="Ahmedis123@a"
+            password="Ahmedis123@a"  # Ensure the password is correct
         )
-        logger.info("تم تهيئة بركة الاتصالات بنجاح")
+        print("Database connection successful")
     except Error as e:
-        logger.error(f"خطأ في تهيئة بركة الاتصالات: {e}")
+        print(f"Error connecting to the database: {e}")
+    
+    return connection
 
-# وظيفة الحصول على اتصال من البركة
-def create_connection():
-    try:
-        if postgreSQL_pool:
-            connection = postgreSQL_pool.getconn()
-            logger.info("تم الحصول على اتصال من البركة")
-            return connection
-        else:
-            logger.error("بركة الاتصالات غير مهيأة")
-            return None
-    except Error as e:
-        logger.error(f"خطأ في الحصول على اتصال: {e}")
-        return None
-
-# وظيفة تشفير كلمة المرور
+# Password hashing function
 def hash_password(password):
     combined = password + "Elction"
-    return hashlib.sha256(combined.encode()).hexdigest()
+    hashed_password = hashlib.sha256(combined.encode()).hexdigest()
+    return hashed_password
 
-# وظيفة إنشاء الجداول
+# Function to create tables
 def create_tables():
     with create_connection() as connection:
-        if connection:
+        if connection is not None:
             cursor = connection.cursor()
             try:
-                # إنشاء جدول الانتخابات
+                # Create Elections table first
                 cursor.execute('''CREATE TABLE IF NOT EXISTS Elections (
                                     ElectionID SERIAL PRIMARY KEY,
                                     ElectionDate TEXT,
                                     ElectionType TEXT,
                                     ElectionStatus TEXT
                                 )''')
-                logger.info("تم إنشاء جدول الانتخابات")
+                print("Elections table created successfully.")
 
-                # إنشاء جدول الناخبين
+                # Create Voters table
                 cursor.execute('''CREATE TABLE IF NOT EXISTS Voters (
                                     VoterID SERIAL PRIMARY KEY,
                                     NationalID TEXT UNIQUE,
@@ -76,9 +56,9 @@ def create_tables():
                                     Password TEXT,
                                     Phone TEXT UNIQUE
                                 )''')
-                logger.info("تم إنشاء جدول الناخبين")
+                print("Voters table created successfully.")
 
-                # إنشاء جدول المرشحين
+                # Create Candidates table
                 cursor.execute('''CREATE TABLE IF NOT EXISTS Candidates (
                                     CandidateID SERIAL PRIMARY KEY,
                                     NationalID TEXT UNIQUE,
@@ -89,9 +69,9 @@ def create_tables():
                                     ElectionID INTEGER,
                                     FOREIGN KEY (ElectionID) REFERENCES Elections (ElectionID) ON DELETE CASCADE
                                 )''')
-                logger.info("تم إنشاء جدول المرشحين")
+                print("Candidates table created successfully.")
 
-                # إنشاء جدول الأصوات
+                # Create Votes table
                 cursor.execute('''CREATE TABLE IF NOT EXISTS Votes (
                                     VoteID SERIAL PRIMARY KEY,
                                     VoterID INTEGER,
@@ -102,9 +82,9 @@ def create_tables():
                                     FOREIGN KEY (CandidateID) REFERENCES Candidates (CandidateID),
                                     FOREIGN KEY (ElectionID) REFERENCES Elections (ElectionID)
                                 )''')
-                logger.info("تم إنشاء جدول الأصوات")
+                print("Votes table created successfully.")
 
-                # إنشاء جدول النتائج
+                # Create Results table
                 cursor.execute('''CREATE TABLE IF NOT EXISTS Results (
                                     ResultID SERIAL PRIMARY KEY,
                                     CountVotes INTEGER,
@@ -114,9 +94,9 @@ def create_tables():
                                     FOREIGN KEY (CandidateID) REFERENCES Candidates (CandidateID),
                                     FOREIGN KEY (ElectionID) REFERENCES Elections (ElectionID)
                                 )''')
-                logger.info("تم إنشاء جدول النتائج")
+                print("Results table created successfully.")
 
-                # إنشاء جدول الإداريين
+                # Create Admins table
                 cursor.execute('''CREATE TABLE IF NOT EXISTS Admins (
                                     AdminID SERIAL PRIMARY KEY,
                                     AdminName TEXT,
@@ -124,107 +104,817 @@ def create_tables():
                                     Password TEXT,
                                     Privileges TEXT
                                 )''')
-                logger.info("تم إنشاء جدول الإداريين")
+                print("Admins table created successfully.")
 
                 connection.commit()
-                logger.info("تم إنشاء جميع الجداول بنجاح")
-            except Error as e:
-                logger.error(f"خطأ في إنشاء الجداول: {e}")
+                print("All tables created successfully.")
+            except psycopg2.Error as e:
+                print(f"Error creating tables: {e}")
                 connection.rollback()
             finally:
                 cursor.close()
         else:
-            logger.error("فشل في الاتصال بقاعدة البيانات")
+            print("Failed to create tables due to database connection error.")
 
-# ------------------- الناخبون -------------------
+# Function to add voters
 @app.route('/voters', methods=['POST'])
 def add_voter():
     data = request.get_json()
     required_fields = ["NationalID", "VoterName", "State", "Email", "HasVoted", "DateOfBirth", "Gender", "Password", "Phone"]
-    
+
     if not all(field in data for field in required_fields):
-        logger.warning("حقول مطلوبة مفقودة في إضافة ناخب")
-        return jsonify({"error": "الحقول المطلوبة مفقودة"}), 400
+        return jsonify({"error": "Missing required fields"}), 400
 
-    with create_connection() as conn:
-        if not conn:
-            return jsonify({"error": "فشل الاتصال بقاعدة البيانات"}), 500
-            
-        cursor = conn.cursor()
-        try:
-            cursor.execute('''INSERT INTO Voters (
-                NationalID, VoterName, State, Email, 
-                HasVoted, DateOfBirth, Gender, Password, Phone
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)''', 
-            (
-                data['NationalID'], data['VoterName'], data['State'], 
-                data['Email'], data['HasVoted'], data['DateOfBirth'],
-                data['Gender'], hash_password(data['Password']), data['Phone']
-            ))
-            conn.commit()
-            logger.info(f"تمت إضافة ناخب جديد: {data['NationalID']}")
-            return jsonify({"message": "تمت الإضافة بنجاح"}), 201
-        except Error as e:
-            logger.error(f"خطأ في إضافة ناخب: {e}")
-            return jsonify({"error": "فشل في العملية"}), 500
+    hashed_password = hash_password(data['Password'])
 
-# ------------------- تسجيل الدخول -------------------
-@app.route('/login', methods=['POST'])
-def login():
+    with create_connection() as connection:
+        if connection is not None:
+            cursor = connection.cursor()
+            try:
+                query = '''INSERT INTO Voters (NationalID, VoterName, State, Email, HasVoted, DateOfBirth, Gender, Password, Phone)
+                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)'''
+                cursor.execute(query, (
+                    data['NationalID'], data['VoterName'], data['State'], data['Email'],
+                    data['HasVoted'], data['DateOfBirth'], data['Gender'], hashed_password, data['Phone']
+                ))
+                connection.commit()
+                return jsonify({"message": "Voter added successfully!"}), 201
+            except psycopg2.IntegrityError as e:
+                print(f"Integrity error: {e}")
+                return jsonify({"error": "Duplicate entry or invalid data"}), 400
+            except Exception as e:
+                print(f"Database error: {e}")
+                return jsonify({"error": "Database operation failed"}), 500
+
+# Function to add candidates
+@app.route('/candidates', methods=['POST'])
+def add_candidate():
     data = request.get_json()
-    national_id = data.get('national_id')
-    password = data.get('password')
+    required_fields = ["NationalID", "CandidateName", "PartyName", "Biography", "CandidateProgram", "ElectionID"]
 
-    with create_connection() as conn:
-        if not conn:
-            return jsonify({"error": "فشل الاتصال بالخادم"}), 500
+    if not all(field in data for field in required_fields):
+        return jsonify({"error": "Missing required fields"}), 400
 
-        cursor = conn.cursor()
-        try:
-            cursor.execute('''SELECT VoterID, HasVoted FROM Voters 
-                           WHERE NationalID = %s AND Password = %s''',
-                           (national_id, hash_password(password)))
-            result = cursor.fetchone()
-            
-            if result:
-                logger.info(f"تسجيل دخول ناجح للناخب: {national_id}")
-                return jsonify({
-                    "voter_id": result[0],
-                    "has_voted": result[1]
-                }), 200
-            else:
-                logger.warning(f"محاولة تسجيل دخول فاشلة: {national_id}")
-                return jsonify({"error": "بيانات غير صحيحة"}), 401
-        except Error as e:
-            logger.error(f"خطأ في تسجيل الدخول: {e}")
-            return jsonify({"error": "خطأ في الخادم"}), 500
+    connection = None
+    try:
+        connection = create_connection()
+        if connection is None:
+            return jsonify({"error": "Failed to connect to the database"}), 500
 
-# ------------------- الإداريون -------------------
+        cursor = connection.cursor()
+
+        # Check if NationalID is unique
+        cursor.execute("SELECT * FROM Candidates WHERE NationalID = %s", (data['NationalID'],))
+        if cursor.fetchone():
+            return jsonify({"error": "Candidate with this NationalID already exists"}), 400
+
+        # Check if ElectionID exists
+        cursor.execute("SELECT * FROM Elections WHERE ElectionID = %s", (data['ElectionID'],))
+        if not cursor.fetchone():
+            return jsonify({"error": "ElectionID does not exist"}), 400
+
+        # Add candidate
+        query = '''INSERT INTO Candidates (NationalID, CandidateName, PartyName, Biography, CandidateProgram, ElectionID)
+                VALUES (%s, %s, %s, %s, %s, %s)'''
+        cursor.execute(query, (
+            data['NationalID'], data['CandidateName'], data['PartyName'],
+            data['Biography'], data['CandidateProgram'], data['ElectionID']
+        ))
+        connection.commit()
+        return jsonify({"message": "Candidate added successfully!"}), 201
+
+    except psycopg2.IntegrityError as e:
+        print(f"Integrity error: {e}")
+        return jsonify({"error": "Duplicate entry or invalid data"}), 400
+    except psycopg2.Error as e:
+        print(f"Database error: {e}")
+        return jsonify({"error": "Database operation failed"}), 500
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        return jsonify({"error": "An unexpected error occurred"}), 500
+    finally:
+        if connection:
+            connection.close()
+
+# Function to add elections
+@app.route('/elections', methods=['POST'])
+def add_election():
+    data = request.get_json()
+    required_fields = ["ElectionDate", "ElectionType", "ElectionStatus"]
+
+    if not all(field in data for field in required_fields):
+        return jsonify({"error": "Missing required fields"}), 400
+
+    with create_connection() as connection:
+        if connection is not None:
+            cursor = connection.cursor()
+            try:
+                query = '''INSERT INTO Elections (ElectionDate, ElectionType, ElectionStatus)
+                        VALUES (%s, %s, %s)'''
+                cursor.execute(query, (data['ElectionDate'], data['ElectionType'], data['ElectionStatus']))
+                connection.commit()
+                return jsonify({"message": "Election added successfully!"}), 201
+            except psycopg2.IntegrityError as e:
+                print(f"Integrity error: {e}")
+                return jsonify({"error": "Duplicate entry or invalid data"}), 400
+            except Exception as e:
+                print(f"Database error: {e}")
+                return jsonify({"error": "Database operation failed"}), 500
+
+# Function to add votes
+@app.route('/votes', methods=['POST'])
+def add_vote():
+    data = request.get_json()
+    required_fields = ["VoterID", "ElectionDate", "CandidateID", "ElectionID"]
+
+    if not all(field in data for field in required_fields):
+        return jsonify({"error": "Missing required fields"}), 400
+
+    with create_connection() as connection:
+        if connection is not None:
+            cursor = connection.cursor()
+            try:
+                query = '''INSERT INTO Votes (VoterID, ElectionDate, CandidateID, ElectionID)
+                        VALUES (%s, %s, %s, %s)'''
+                cursor.execute(query, (data['VoterID'], data['ElectionDate'], data['CandidateID'], data['ElectionID']))
+                connection.commit()
+                return jsonify({"message": "Vote added successfully!"}), 201
+            except psycopg2.IntegrityError as e:
+                print(f"Integrity error: {e}")
+                return jsonify({"error": "Duplicate entry or invalid data"}), 400
+            except Exception as e:
+                print(f"Database error: {e}")
+                return jsonify({"error": "Database operation failed"}), 500
+
+# Function to add results
+@app.route('/results', methods=['POST'])
+def add_result():
+    data = request.get_json()
+    required_fields = ["CountVotes", "CandidateID", "ResultDate", "ElectionID"]
+
+    if not all(field in data for field in required_fields):
+        return jsonify({"error": "Missing required fields"}), 400
+
+    with create_connection() as connection:
+        if connection is not None:
+            cursor = connection.cursor()
+            try:
+                query = '''INSERT INTO Results (CountVotes, CandidateID, ResultDate, ElectionID)
+                        VALUES (%s, %s, %s, %s)'''
+                cursor.execute(query, (data['CountVotes'], data['CandidateID'], data['ResultDate'], data['ElectionID']))
+                connection.commit()
+                return jsonify({"message": "Result added successfully!"}), 201
+            except psycopg2.IntegrityError as e:
+                print(f"Integrity error: {e}")
+                return jsonify({"error": "Duplicate entry or invalid data"}), 400
+            except Exception as e:
+                print(f"Database error: {e}")
+                return jsonify({"error": "Database operation failed"}), 500
+
+# Function to add admins
 @app.route('/admin', methods=['POST'])
 def add_admin():
     data = request.get_json()
     required_fields = ["AdminName", "Email", "Password", "Privileges"]
-    
+
     if not all(field in data for field in required_fields):
-        return jsonify({"error": "الحقول المطلوبة مفقودة"}), 400
+        return jsonify({"error": "Missing required fields"}), 400
+
+    hashed_password = hash_password(data['Password'])
+
+    with create_connection() as connection:
+        if connection is not None:
+            cursor = connection.cursor()
+            try:
+                query = '''INSERT INTO Admins (AdminName, Email, Password, Privileges)
+                        VALUES (%s, %s, %s, %s)'''
+                cursor.execute(query, (data['AdminName'], data['Email'], hashed_password, data['Privileges']))
+                connection.commit()
+                return jsonify({"message": "Admin added successfully!"}), 201
+            except psycopg2.IntegrityError as e:
+                print(f"Integrity error: {e}")
+                return jsonify({"error": "Duplicate entry or invalid data"}), 400
+            except Exception as e:
+                print(f"Database error: {e}")
+                return jsonify({"error": "Database operation failed"}), 500
+
+# Function to retrieve voters
+@app.route('/voters', methods=['GET'])
+def get_voters():
+    with create_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM Voters')
+        rows = cursor.fetchall()
+
+        if not rows:
+            return jsonify({"error": "No Voter found"}), 404
+
+        voters = []
+        for row in rows:
+            voters.append({
+                "VoterID": row[0],
+                "NationalID": row[1],
+                "VoterName": row[2],
+                "State": row[3],
+                "Email": row[4],
+                "HasVoted": row[5],
+                "DateOfBirth": row[6],
+                "Gender": row[7],
+                "Password": row[8],
+                "Phone": row[9]
+            })
+        return jsonify(voters), 200
+
+# Function to retrieve candidates
+@app.route('/candidates', methods=['GET'])
+def get_candidates():
+    with create_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM Candidates')
+        candidates = cursor.fetchall()
+
+        if not candidates:
+            return jsonify({"error": "No candidates found"}), 404
+
+        candidate_list = []
+        for candidate in candidates:
+            candidate_list.append({
+                "CandidateID": candidate[0],
+                "NationalID": candidate[1],
+                "CandidateName": candidate[2],
+                "PartyName": candidate[3],
+                "Biography": candidate[4],
+                "CandidateProgram": candidate[5],
+                "ElectionID": candidate[6]
+            })
+        return jsonify(candidate_list), 200
+
+# Function to retrieve candidates by election ID
+@app.route('/candidates/election/<int:election_id>', methods=['GET'])
+def get_candidates_by_election(election_id):
+    if election_id <= 0:
+        return jsonify({"error": "Invalid ElectionID. It must be a positive integer."}), 400
 
     with create_connection() as conn:
         cursor = conn.cursor()
-        try:
-            cursor.execute('''INSERT INTO Admins 
-                            (AdminName, Email, Password, Privileges)
-                            VALUES (%s, %s, %s, %s)''',
-                            (data['AdminName'], data['Email'], 
-                             hash_password(data['Password']), data['Privileges']))
-            conn.commit()
-            logger.info(f"تمت إضافة مدير جديد: {data['Email']}")
-            return jsonify({"message": "تمت الإضافة بنجاح"}), 201
-        except Error as e:
-            logger.error(f"خطأ في إضافة مدير: {e}")
-            return jsonify({"error": "فشل في العملية"}), 500
+        cursor.execute('SELECT * FROM Candidates WHERE ElectionID = %s', (election_id,))
+        candidates = cursor.fetchall()
 
-# ------------------- تشغيل التطبيق -------------------
+        if not candidates:
+            return jsonify({"error": "No candidates found for the given ElectionID"}), 404
+
+        candidate_list = []
+        for candidate in candidates:
+            candidate_list.append({
+                "CandidateID": candidate[0],
+                "NationalID": candidate[1],
+                "CandidateName": candidate[2],
+                "PartyName": candidate[3],
+                "Biography": candidate[4],
+                "CandidateProgram": candidate[5],
+                "ElectionID": candidate[6]
+            })
+        return jsonify(candidate_list), 200
+
+# Function to retrieve elections
+@app.route('/elections', methods=['GET'])
+def get_elections():
+    with create_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM Elections')
+        rows = cursor.fetchall()
+
+        if not rows:
+            return jsonify({"error": "No election found"}), 404
+
+        elections = []
+        for row in rows:
+            elections.append({
+                "ElectionID": row[0],
+                "ElectionDate": row[1],
+                "ElectionType": row[2],
+                "ElectionStatus": row[3]
+            })
+        return jsonify(elections), 200
+
+# Function to retrieve votes
+@app.route('/votes', methods=['GET'])
+def get_votes():
+    with create_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM Votes')
+        rows = cursor.fetchall()
+
+        if not rows:
+            return jsonify({"error": "No vote found"}), 404
+
+        votes = []
+        for row in rows:
+            votes.append({
+                "VoteID": row[0],
+                "VoterID": row[1],
+                "ElectionDate": row[2],
+                "CandidateID": row[3],
+                "ElectionID": row[4]
+            })
+        return jsonify(votes), 200
+
+# Function to retrieve results
+@app.route('/results', methods=['GET'])
+def get_results():
+    with create_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM Results')
+        rows = cursor.fetchall()
+
+        if not rows:
+            return jsonify({"error": "No result found"}), 404
+
+        results = []
+        for row in rows:
+            results.append({
+                "ResultID": row[0],
+                "CountVotes": row[1],
+                "CandidateID": row[2],
+                "ResultDate": row[3],
+                "ElectionID": row[4]
+            })
+        return jsonify(results), 200
+
+# Function to retrieve admins
+@app.route('/admin', methods=['GET'])
+def get_admin():
+    with create_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM Admins')
+        rows = cursor.fetchall()
+
+        if not rows:
+            return jsonify({"error": "No admin found"}), 404
+
+        admins = []
+        for row in rows:
+            admins.append({
+                "AdminID": row[0],
+                "AdminName": row[1],
+                "Email": row[2],
+                "Password": row[3],
+                "Privileges": row[4]
+            })
+        return jsonify(admins), 200
+
+# Function to delete a voter
+@app.route('/voters/<int:voter_id>', methods=['DELETE'])
+def delete_voter(voter_id):
+    if voter_id <= 0:
+        return jsonify({"error": "Invalid voter_id. It must be a positive integer."}), 400
+
+    with create_connection() as conn:
+        try:
+            cursor = conn.cursor()
+            query = '''DELETE FROM Voters WHERE VoterID = %s'''
+            cursor.execute(query, (voter_id,))
+            conn.commit()
+
+            if cursor.rowcount == 0:
+                return jsonify({"error": "Voter not found"}), 404
+
+            return jsonify({"message": "Voter deleted successfully!"}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+# Function to update a voter
+@app.route('/voters/<int:voter_id>', methods=['PUT'])
+def update_voter(voter_id):
+    if voter_id <= 0:
+        return jsonify({"error": "Invalid VoterID. It must be a positive integer."}), 400
+
+    data = request.get_json()
+    updatable_fields = ["NationalID", "VoterName", "State", "Email", "HasVoted", "DateOfBirth", "Gender", "Password", "Phone"]
+    missing_fields = [field for field in updatable_fields if field not in data or data[field] == ""]
+    if missing_fields:
+        return jsonify({"error": f"Missing or empty fields: {', '.join(missing_fields)}"}), 400
+
+    hashed_password = hash_password(data['Password'])
+
+    with create_connection() as conn:
+        try:
+            cursor = conn.cursor()
+            query = '''
+                UPDATE Voters SET NationalID = %s, VoterName = %s, State = %s, Email = %s,
+                HasVoted = %s, DateOfBirth = %s, Gender = %s, Password = %s, Phone = %s
+                WHERE VoterID = %s
+            '''
+            cursor.execute(query, (
+                data['NationalID'], data['VoterName'], data['State'], data['Email'],
+                data['HasVoted'], data['DateOfBirth'], data['Gender'], hashed_password,
+                data['Phone'], voter_id
+            ))
+            conn.commit()
+
+            if cursor.rowcount == 0:
+                return jsonify({"error": "Voter not found or no changes made"}), 404
+
+            return jsonify({"message": "Voter updated successfully!"}), 200
+        except psycopg2.IntegrityError:
+            return jsonify({"error": "Duplicate entry or invalid data"}), 400
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+# Function to update a candidate
+@app.route('/candidates/<int:candidate_id>', methods=['PUT'])
+def update_candidate(candidate_id):
+    if candidate_id <= 0:
+        return jsonify({"error": "Invalid CandidateID. It must be a positive integer."}), 400
+
+    data = request.get_json()
+    updatable_fields = ["NationalID", "CandidateName", "PartyName", "Biography", "CandidateProgram", "ElectionID"]
+    missing_fields = [field for field in updatable_fields if field not in data or data[field] == ""]
+    if missing_fields:
+        return jsonify({"error": f"Missing or empty fields: {', '.join(missing_fields)}"}), 400
+
+    with create_connection() as conn:
+        try:
+            cursor = conn.cursor()
+            query = '''
+                UPDATE Candidates
+                SET NationalID = %s, CandidateName = %s, PartyName = %s, Biography = %s,
+                    CandidateProgram = %s, ElectionID = %s
+                WHERE CandidateID = %s
+            '''
+            cursor.execute(query, (
+                data["NationalID"], data["CandidateName"], data["PartyName"], data["Biography"],
+                data["CandidateProgram"], data["ElectionID"], candidate_id
+            ))
+            conn.commit()
+
+            if cursor.rowcount == 0:
+                return jsonify({"error": "Candidate not found or no changes made"}), 404
+
+            return jsonify({"message": "Candidate updated successfully!"}), 200
+        except psycopg2.IntegrityError:
+            return jsonify({"error": "Duplicate entry or invalid data"}), 400
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+# Function to delete a candidate
+@app.route('/candidates/<int:candidate_id>', methods=['DELETE'])
+def delete_candidate(candidate_id):
+    if candidate_id <= 0:
+        return jsonify({"error": "Invalid CandidateID. It must be a positive integer."}), 400
+
+    with create_connection() as conn:
+        try:
+            cursor = conn.cursor()
+            query = "DELETE FROM Candidates WHERE CandidateID = %s"
+            cursor.execute(query, (candidate_id,))
+            conn.commit()
+
+            if cursor.rowcount == 0:
+                return jsonify({"error": "Candidate not found"}), 404
+
+            return jsonify({"message": "Candidate deleted successfully!"}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+# Function to update an election
+@app.route('/elections/<int:election_id>', methods=['PUT'])
+def update_election(election_id):
+    if election_id <= 0:
+        return jsonify({"error": "Invalid ElectionID. It must be a positive integer."}), 400
+
+    data = request.get_json()
+    updatable_fields = ["ElectionDate", "ElectionType", "ElectionStatus"]
+    missing_fields = [field for field in updatable_fields if field not in data or data[field] == ""]
+    if missing_fields:
+        return jsonify({"error": f"Missing or empty fields: {', '.join(missing_fields)}"}), 400
+
+    with create_connection() as conn:
+        try:
+            cursor = conn.cursor()
+            query = '''
+                UPDATE Elections
+                SET ElectionDate = %s, ElectionType = %s, ElectionStatus = %s
+                WHERE ElectionID = %s
+            '''
+            cursor.execute(query, (
+                data['ElectionDate'], data['ElectionType'], data['ElectionStatus'], election_id
+            ))
+            conn.commit()
+
+            if cursor.rowcount == 0:
+                return jsonify({"error": "Election not found or no changes made"}), 404
+
+            return jsonify({"message": "Election updated successfully!"}), 200
+        except psycopg2.IntegrityError:
+            return jsonify({"error": "Duplicate entry or invalid data"}), 400
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+# Function to delete an election
+@app.route('/elections/<int:election_id>', methods=['DELETE'])
+def delete_election(election_id):
+    if election_id <= 0:
+        return jsonify({"error": "Invalid election_id. It must be a positive integer."}), 400
+
+    with create_connection() as conn:
+        try:
+            cursor = conn.cursor()
+            query = '''DELETE FROM Elections WHERE ElectionID = %s'''
+            cursor.execute(query, (election_id,))
+            conn.commit()
+
+            if cursor.rowcount == 0:
+                return jsonify({"error": "Election not found"}), 404
+
+            return jsonify({"message": "Election deleted successfully!"}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+# Function to update an admin
+@app.route('/admin/<int:admin_id>', methods=['PUT'])
+def update_admin(admin_id):
+    if admin_id <= 0:
+        return jsonify({"error": "Invalid admin_id. It must be a positive integer."}), 400
+
+    data = request.get_json()
+    updatable_fields = ["AdminName", "Email", "Password", "Privileges"]
+    missing_fields = [field for field in updatable_fields if field not in data or data[field] == ""]
+    if missing_fields:
+        return jsonify({"error": f"Missing or empty fields: {', '.join(missing_fields)}"}), 400
+
+    hashed_password = hash_password(data['Password']) if len(data['Password']) < 50 else data['Password']
+
+    with create_connection() as conn:
+        try:
+            cursor = conn.cursor()
+            query = '''
+                UPDATE Admins
+                SET AdminName = %s, Email = %s, Password = %s, Privileges = %s
+                WHERE AdminID = %s
+            '''
+            cursor.execute(query, (
+                data['AdminName'], data['Email'], hashed_password, data['Privileges'], admin_id
+            ))
+            conn.commit()
+
+            if cursor.rowcount == 0:
+                return jsonify({"error": "Admin not found or no changes made"}), 404
+
+            return jsonify({"message": "Admin updated successfully!"}), 200
+        except psycopg2.IntegrityError:
+            return jsonify({"error": "Duplicate entry or invalid data"}), 400
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+# Function to delete an admin
+@app.route('/admin/<int:admin_id>', methods=['DELETE'])
+def delete_admin(admin_id):
+    if admin_id <= 0:
+        return jsonify({"error": "Invalid admin_id. It must be a positive integer."}), 400
+
+    with create_connection() as conn:
+        try:
+            cursor = conn.cursor()
+            query = '''DELETE FROM Admins WHERE AdminID = %s'''
+            cursor.execute(query, (admin_id,))
+            conn.commit()
+
+            if cursor.rowcount == 0:
+                return jsonify({"error": "Admin not found"}), 404
+
+            return jsonify({"message": "Admin deleted successfully!"}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+# Function to retrieve election results sorted by vote count
+@app.route('/election_results/<int:election_id>', methods=['GET'])
+def get_election_results(election_id):
+    if election_id <= 0:
+        return jsonify({"error": "معرّف الانتخابات غير صالح"}), 400
+
+    conn = create_connection()
+    if not conn:
+        return jsonify({"error": "تعذر الاتصال بالخادم"}), 500
+
+    try:
+        with conn.cursor() as cursor:
+            # 1. التحقق من وجود الانتخابات
+            cursor.execute("SELECT ElectionID FROM Elections WHERE ElectionID = %s", (election_id,))
+            if not cursor.fetchone():
+                return jsonify({"error": "الانتخابات غير موجودة"}), 404
+
+            # 2. جلب النتائج مع التحقق من ارتباط المرشح بالانتخابات
+            query = """
+                SELECT 
+                    c.CandidateID,
+                    c.CandidateName,
+                    c.PartyName,
+                    r.CountVotes,
+                    r.ElectionID
+                FROM Results r
+                INNER JOIN Candidates c 
+                    ON r.CandidateID = c.CandidateID 
+                    AND c.ElectionID = %s  -- <-- الشرط الجديد
+                WHERE r.ElectionID = %s
+                ORDER BY r.CountVotes DESC
+            """
+            cursor.execute(query, (election_id, election_id))
+            results = cursor.fetchall()
+
+            if not results:
+                return jsonify({"message": "لا توجد نتائج متاحة لهذه الانتخابات"}), 200
+
+            # تحويل النتائج إلى تنسيق JSON
+            formatted_results = [
+                {
+                    "CandidateID": row[0],
+                    "CandidateName": row[1],
+                    "PartyName": row[2],
+                    "CountVotes": row[3],
+                    "ElectionID": row[4]
+                }
+                for row in results
+            ]
+
+            return jsonify(formatted_results), 200
+
+    except psycopg2.DatabaseError as e:
+        app.logger.error(f"خطأ قاعدة البيانات: {str(e)}")
+        return jsonify({"error": "خطأ في معالجة البيانات"}), 500
+    except Exception as e:
+        app.logger.error(f"خطأ غير متوقع: {str(e)}")
+        return jsonify({"error": "خطأ داخلي"}), 500
+    finally:
+        if conn:
+            conn.close()
+            
+# Function to update a vote
+@app.route('/votes/<int:vote_id>', methods=['PUT'])
+def update_vote(vote_id):
+    if vote_id <= 0:
+        return jsonify({"error": "Invalid voteID. It must be a positive integer."}), 400
+
+    data = request.get_json()
+    updatable_fields = ["ElectionDate", "CandidateID", "ElectionID"]
+    missing_fields = [field for field in updatable_fields if field not in data or data[field] == ""]
+    if missing_fields:
+        return jsonify({"error": f"Missing or empty fields: {', '.join(missing_fields)}"}), 400
+
+    with create_connection() as conn:
+        try:
+            cursor = conn.cursor()
+            query = '''UPDATE Votes SET ElectionDate = %s, CandidateID = %s, ElectionID = %s
+                    WHERE VoteID = %s'''
+            cursor.execute(query, (
+                data['ElectionDate'], data['CandidateID'], data['ElectionID'], vote_id
+            ))
+
+            conn.commit()
+
+            if cursor.rowcount == 0:
+                return jsonify({"error": "Vote not found or no changes made"}), 404
+
+            return jsonify({"message": "Vote updated successfully!"}), 200
+        except psycopg2.IntegrityError:
+            return jsonify({"error": "Duplicate entry or invalid data"}), 400
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+# Function to login
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    national_id = data['national_id']
+    password = data['password']
+
+    connection = create_connection()
+    cursor = connection.cursor()
+
+    try:
+        hashed_password = hash_password(password)
+
+        cursor.execute('''
+            SELECT VoterID, HasVoted FROM Voters
+            WHERE NationalID = %s AND Password = %s
+        ''', (national_id, hashed_password))
+        result = cursor.fetchone()
+
+        if result:
+            cursor.execute("SELECT ElectionID FROM Votes WHERE VoterID = %s", (result[0],))
+            vote_result = cursor.fetchall()
+            if vote_result:
+                election_id = [row[0] for row in vote_result]        
+            else:
+                election_id = []
+            voter_id = result[0]
+            HasVoted = result[1]
+
+            return jsonify({"message": "Login successful!", "voter_id": voter_id, "HasVoted": HasVoted, "election_id": election_id}), 200
+        else:
+            return jsonify({"message": "خطاء في الرقم الوطني او كلمة السر"}), 401
+
+    except psycopg2.Error as e:
+        return jsonify({"message": str(e)}), 500
+
+    finally:
+        connection.close()
+
+# Function to login as admin
+@app.route('/login_admin', methods=['POST'])
+def login_admin():
+    data = request.get_json()
+    Email = data['Email']
+    password = data['password']
+
+    connection = create_connection()
+    cursor = connection.cursor()
+
+    try:
+        hashed_password = hash_password(password)
+
+        cursor.execute('''
+            SELECT Privileges FROM Admins
+            WHERE Email = %s AND Password = %s
+        ''', (Email, hashed_password))
+        result = cursor.fetchone()
+
+        if result:
+            Privileges = result[0]
+            return jsonify({"message": "Login successful!", "Privileges": Privileges}), 200
+        else:
+            return jsonify({"message": "خطاء في الرقم الوطني او كلمة السر"}), 401
+
+    except psycopg2.Error as e:
+        return jsonify({"message": str(e)}), 500
+
+    finally:
+        connection.close()
+
+@app.route('/castVote', methods=['POST'])
+def castVote():
+    data = request.get_json()
+    voter_id = data['voter_id']
+    election_id = data['election_id']
+    candidate_id = data['candidate_id']
+    date = data['date']
+
+    connection = create_connection()
+    cursor = connection.cursor()
+
+    try:
+        # 1. Check voter status
+        cursor.execute("SELECT HasVoted FROM Voters WHERE VoterID = %s", (voter_id,))
+        voter = cursor.fetchone()
+        if not voter:
+            return jsonify({"error": "Voter not found"}), 404
+
+        if voter[0]:  # If the voter has already voted
+            return jsonify({"error": "Voter has already voted"}), 400
+
+        # 2. Insert the vote
+        cursor.execute("""
+            INSERT INTO Votes (VoterID, ElectionID, CandidateID, ElectionDate)
+            VALUES (%s, %s, %s, %s)
+        """, (voter_id, election_id, candidate_id, date))
+
+        # 3. Update the vote count in Results
+        cursor.execute("""
+            SELECT CountVotes FROM Results
+            WHERE ElectionID = %s AND CandidateID = %s
+        """, (election_id, candidate_id))
+        result = cursor.fetchone()
+        if result:
+            cursor.execute("""
+                UPDATE Results
+                SET CountVotes = CountVotes + 1
+                WHERE ElectionID = %s AND CandidateID = %s
+            """, (election_id, candidate_id))
+        else:
+            cursor.execute("""
+                INSERT INTO Results (ElectionID, CandidateID, CountVotes, ResultDate)
+                VALUES (%s, %s, 1, %s)
+            """, (election_id, candidate_id, date))
+
+        # 4. Update the voter's status
+        cursor.execute("""
+            UPDATE Voters
+            SET HasVoted = TRUE
+            WHERE VoterID = %s
+        """, (voter_id,))
+
+        connection.commit()
+        return jsonify({"message": "Vote recorded successfully"}), 200
+
+    except psycopg2.Error as e:
+        connection.rollback()
+        print(f"Database error: {e}")  # Log the error
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        connection.close()
+
+# Run the server
 if __name__ == '__main__':
-    initialize_pool()  # تهيئة البركة أولاً
-    create_tables()     # إنشاء الجداول
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    create_tables()  # Create tables when the application starts
+    app.run(debug=False, host='0.0.0.0')
