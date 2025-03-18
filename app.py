@@ -65,7 +65,65 @@ def create_tables():
 
     try:
         with conn.cursor() as cursor:
-            # ... (نفس الجداول السابقة)
+            tables = [
+                """CREATE TABLE IF NOT EXISTS Elections (
+                    ElectionID SERIAL PRIMARY KEY,
+                    ElectionDate TEXT,
+                    ElectionType TEXT,
+                    ElectionStatus TEXT
+                )""",
+                
+                """CREATE TABLE IF NOT EXISTS Voters (
+                    VoterID SERIAL PRIMARY KEY,
+                    NationalID TEXT UNIQUE,
+                    VoterName TEXT,
+                    State TEXT,
+                    Email TEXT,
+                    HasVoted BOOLEAN,
+                    DateOfBirth DATE,
+                    Gender TEXT,
+                    Password TEXT,
+                    Phone TEXT UNIQUE
+                )""",
+                
+                """CREATE TABLE IF NOT EXISTS Candidates (
+                    CandidateID SERIAL PRIMARY KEY,
+                    NationalID TEXT UNIQUE,
+                    CandidateName TEXT,
+                    PartyName TEXT,
+                    Biography TEXT,
+                    CandidateProgram TEXT,
+                    ElectionID INTEGER REFERENCES Elections(ElectionID) ON DELETE CASCADE
+                )""",
+                
+                """CREATE TABLE IF NOT EXISTS Votes (
+                    VoteID SERIAL PRIMARY KEY,
+                    VoterID INTEGER REFERENCES Voters(VoterID),
+                    ElectionDate TEXT,
+                    CandidateID INTEGER REFERENCES Candidates(CandidateID),
+                    ElectionID INTEGER REFERENCES Elections(ElectionID)
+                )""",
+                
+                """CREATE TABLE IF NOT EXISTS Results (
+                    ResultID SERIAL PRIMARY KEY,
+                    CountVotes INTEGER,
+                    CandidateID INTEGER REFERENCES Candidates(CandidateID),
+                    ResultDate TEXT,
+                    ElectionID INTEGER REFERENCES Elections(ElectionID)
+                )""",
+                
+                """CREATE TABLE IF NOT EXISTS Admins (
+                    AdminID SERIAL PRIMARY KEY,
+                    AdminName TEXT,
+                    Email TEXT UNIQUE,
+                    Password TEXT,
+                    Privileges TEXT
+                )"""
+            ]
+            
+            for table in tables:
+                cursor.execute(table)
+            conn.commit()
         logging.info("تم إنشاء الجداول بنجاح")
     except Error as e:
         logging.critical("فشل في إنشاء الجداول: %s", e)
@@ -78,7 +136,37 @@ def create_tables():
 # ---------------------------------------------------
 @app.route('/voters', methods=['POST'])
 def add_voter():
-    # ... (الكود السابق مع التعديلات)
+    data = request.get_json()
+    required_fields = ["NationalID", "VoterName", "State", "Email", 
+                      "HasVoted", "DateOfBirth", "Gender", "Password", "Phone"]
+
+    if not all(field in data for field in required_fields):
+        logging.warning("بيانات ناخب غير كاملة")
+        return jsonify({"error": "حقول مطلوبة مفقودة"}), 400
+
+    conn = get_connection()
+    if not conn:
+        logging.error("فشل إضافة ناخب: لا يوجد اتصال")
+        return jsonify({"error": "خطأ في قاعدة البيانات"}), 500
+
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """INSERT INTO Voters 
+                (NationalID, VoterName, State, Email, HasVoted, 
+                 DateOfBirth, Gender, Password, Phone)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                (data['NationalID'], data['VoterName'], data['State'],
+                 data['Email'], data['HasVoted'], data['DateOfBirth'],
+                 data['Gender'], hash_password(data['Password']), data['Phone'])
+            )
+            conn.commit()
+            return jsonify({"message": "تم إضافة الناخب بنجاح"}), 201
+    except Error as e:
+        logging.warning("خطأ في إضافة ناخب: %s", e)
+        return jsonify({"error": "فشل في العملية"}), 500
+    finally:
+        release_connection(conn)
 
 @app.route('/voters/<int:voter_id>', methods=['PUT'])
 def update_voter(voter_id):
