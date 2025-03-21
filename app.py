@@ -330,7 +330,7 @@ def get_voters():
 def get_candidates():
     with create_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM Candidates')
+        cursor.execute('SELECT * FROM Candidates ORDER BY CandidateName ASC')
         candidates = cursor.fetchall()
 
         if not candidates:
@@ -357,7 +357,7 @@ def get_candidates_by_election(election_id):
 
     with create_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM Candidates WHERE ElectionID = %s', (election_id,))
+        cursor.execute('SELECT * FROM Candidates WHERE ElectionID = %s ORDER BY CandidateName ASC', (election_id,))
         candidates = cursor.fetchall()
 
         if not candidates:
@@ -870,7 +870,7 @@ def castVote():
             return jsonify({"error": "Voter not found"}), 404
 
         if voter[0]:  # If the voter has already voted
-            return jsonify({"error": "Voter has already voted"}), 400
+            return jsonify({"error": "لقد صوت الناخب بالفعل"}), 400
 
         # 2. Insert the vote
         cursor.execute("""
@@ -904,7 +904,7 @@ def castVote():
         """, (voter_id,))
 
         connection.commit()
-        return jsonify({"message": "Vote recorded successfully"}), 200
+        return jsonify({"message": "تم تسجيل تصويتك بنجاح."}), 200
 
     except psycopg2.Error as e:
         connection.rollback()
