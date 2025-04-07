@@ -913,7 +913,77 @@ def castVote():
 
     finally:
         connection.close()
+        
+@app.route('/report_data/<string:time_period>/<int:election_id>', methods=['GET'])
+def get_time_based_report(time_period, election_id):
+    valid_periods = ['day', 'week', 'month', 'all']
+    if time_period not in valid_periods:
+        return jsonify({"error": "Invalid time period"}), 400
 
+    conn = create_connection()
+    if not conn:
+        return jsonify({"error": "Database connection failed"}), 500
+
+    try:
+        with conn.cursor() as cursor:
+            # الحصول على قائمة المرشحين
+            cursor.execute('''
+                SELECT CandidateID, CandidateName 
+                FROM Candidates 
+                WHERE ElectionID = %s
+                ORDER BY CandidateID
+            ''', (election_id,))
+            candidates = cursor.fetchall()
+            labels = [candidate[1] for candidate in candidates]
+            candidate_ids = [candidate[0] for candidate in candidates]
+
+            data = [0] * len(candidate_ids)
+
+            # بناء الاستعلام حسب الفترة
+            base_query = '''
+                SELECT 
+                    c.CandidateID,
+                    COUNT(v.VoteID) AS vote_count
+                FROM Candidates c
+                LEFT JOIN Votes v 
+                    ON c.CandidateID = v.CandidateID 
+                    AND v.ElectionID = %s
+            '''
+
+            if time_period != 'all':
+                base_query += f'''
+                    AND v.ElectionDate >= CURRENT_DATE - INTERVAL '1 {time_period}'
+                '''
+
+            base_query += '''
+                WHERE c.ElectionID = %s
+                GROUP BY c.CandidateID
+                ORDER BY c.CandidateID
+            '''
+
+            cursor.execute(base_query, (election_id, election_id))
+            results = cursor.fetchall()
+
+            # تعبئة البيانات
+            for row in results:
+                try:
+                    index = candidate_ids.index(row[0])
+                    data[index] = row[1]
+                except ValueError:
+                    continue
+
+            return jsonify({
+                "timePeriod": time_period,
+                "data": data,
+                "labels": labels
+            }), 200
+
+    except psycopg2.Error as e:
+        print(f"Database error: {e}")
+        return jsonify({"error": "Database operation failed"}), 500
+    finally:
+        if conn:
+            conn.close()
 # Run the server
 if __name__ == '__main__':
     create_tables()  # Create tables when the application starts
