@@ -939,7 +939,16 @@ def get_time_based_report(time_period, election_id):
 
             data = [0] * len(candidate_ids)
 
-            # بناء الاستعلام حسب الفترة
+            # تحديد الفترة الزمنية المطلوبة
+            interval = ''
+            if time_period == 'day':
+                interval = '1 day'
+            elif time_period == 'week':
+                interval = '7 day'
+            elif time_period == 'month':
+                interval = '30 day'
+
+            # بناء الاستعلام
             base_query = '''
                 SELECT 
                     c.CandidateID,
@@ -952,7 +961,7 @@ def get_time_based_report(time_period, election_id):
 
             if time_period != 'all':
                 base_query += f'''
-                    AND v.ElectionDate >= CURRENT_DATE - INTERVAL '1 {time_period}'
+                    AND TO_DATE(v.ElectionDate, 'YYYY-MM-DD') >= CURRENT_DATE - INTERVAL '{interval}'
                 '''
 
             base_query += '''
@@ -984,6 +993,7 @@ def get_time_based_report(time_period, election_id):
     finally:
         if conn:
             conn.close()
+            
 # Run the server
 if __name__ == '__main__':
     create_tables()  # Create tables when the application starts
