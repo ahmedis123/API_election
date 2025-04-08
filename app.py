@@ -914,11 +914,19 @@ def castVote():
     finally:
         connection.close()
         
-@app.route('/report_data/<string:time_period>/<int:election_id>', methods=['GET'])
-def get_time_based_report(time_period, election_id):
-    valid_periods = ['day', 'week', 'month', 'all']
-    if time_period not in valid_periods:
-        return jsonify({"error": "Invalid time period"}), 400
+@app.route('/election_reports/<int:election_id>', methods=['GET'])
+def get_election_reports(election_id):
+    """
+    Retrieve all data needed for election reports including:
+    - Election details
+    - Voter turnout statistics
+    - Election results
+    - Candidates list
+    - Voter demographics
+    - Vote counts by time period
+    """
+    if election_id <= 0:
+        return jsonify({"error": "Invalid ElectionID"}), 400
 
     conn = create_connection()
     if not conn:
@@ -926,66 +934,156 @@ def get_time_based_report(time_period, election_id):
 
     try:
         with conn.cursor() as cursor:
-            # الحصول على قائمة المرشحين
-            cursor.execute('''
-                SELECT CandidateID, CandidateName 
-                FROM Candidates 
+            # 1. Get election details
+            cursor.execute("SELECT * FROM Elections WHERE ElectionID = %s", (election_id,))
+            election = cursor.fetchone()
+            if not election:
+                return jsonify({"error": "Election not found"}), 404
+
+            election_data = {
+                "ElectionID": election[0],
+                "ElectionDate": election[1],
+                "ElectionType": election[2],
+                "ElectionStatus": election[3]
+            }
+
+            # 2. Get voter turnout statistics
+            # Total registered voters
+            cursor.execute("SELECT COUNT(*) FROM Voters")
+            total_voters = cursor.fetchone()[0]
+
+            # Voters who voted in this election
+            cursor.execute("""
+                SELECT COUNT(DISTINCT VoterID) 
+                FROM Votes 
                 WHERE ElectionID = %s
-                ORDER BY CandidateID
-            ''', (election_id,))
-            candidates = cursor.fetchall()
-            labels = [candidate[1] for candidate in candidates]
-            candidate_ids = [candidate[0] for candidate in candidates]
+            """, (election_id,))
+            voters_voted = cursor.fetchone()[0]
 
-            data = [0] * len(candidate_ids)
+            turnout_percentage = 0
+            if total_voters > 0:
+                turnout_percentage = round((voters_voted / total_voters) * 100, 2)
 
-            # تحديد الفترة الزمنية المطلوبة
-            interval = ''
-            if time_period == 'day':
-                interval = '1 day'
-            elif time_period == 'week':
-                interval = '7 day'
-            elif time_period == 'month':
-                interval = '30 day'
+            turnout_data = {
+                "TotalRegisteredVoters": total_voters,
+                "VotersVoted": voters_voted,
+                "TurnoutPercentage": turnout_percentage
+            }
 
-            # بناء الاستعلام
-            base_query = '''
-                SELECT 
-                    c.CandidateID,
-                    COUNT(v.VoteID) AS vote_count
+            # 3. Get election results
+            cursor.execute("""
+                SELECT c.CandidateID, c.CandidateName, c.PartyName, 
+                       COALESCE(r.CountVotes, 0) as VoteCount
                 FROM Candidates c
-                LEFT JOIN Votes v 
-                    ON c.CandidateID = v.CandidateID 
-                    AND v.ElectionID = %s
-            '''
-
-            if time_period != 'all':
-                base_query += f'''
-                    AND TO_DATE(v.ElectionDate, 'YYYY-MM-DD') >= CURRENT_DATE - INTERVAL '{interval}'
-                '''
-
-            base_query += '''
+                LEFT JOIN Results r ON c.CandidateID = r.CandidateID AND r.ElectionID = %s
                 WHERE c.ElectionID = %s
-                GROUP BY c.CandidateID
-                ORDER BY c.CandidateID
-            '''
+                ORDER BY VoteCount DESC
+            """, (election_id, election_id))
+            
+            results = []
+            for row in cursor.fetchall():
+                results.append({
+                    "CandidateID": row[0],
+                    "CandidateName": row[1],
+                    "PartyName": row[2],
+                    "VoteCount": row[3]
+                })
 
-            cursor.execute(base_query, (election_id, election_id))
-            results = cursor.fetchall()
+            # 4. Get candidates list
+            cursor.execute("""
+                SELECT CandidateID, CandidateName, PartyName, NationalID
+                FROM Candidates
+                WHERE ElectionID = %s
+                ORDER BY CandidateName
+            """, (election_id,))
+            
+            candidates = []
+            for row in cursor.fetchall():
+                candidates.append({
+                    "CandidateID": row[0],
+                    "CandidateName": row[1],
+                    "PartyName": row[2],
+                    "NationalID": row[3]
+                })
 
-            # تعبئة البيانات
-            for row in results:
-                try:
-                    index = candidate_ids.index(row[0])
-                    data[index] = row[1]
-                except ValueError:
-                    continue
+            # 5. Get voter demographics
+            # Gender distribution
+            cursor.execute("""
+                SELECT Gender, COUNT(*) as Count
+                FROM Voters
+                GROUP BY Gender
+            """)
+            
+            gender_distribution = {}
+            for row in cursor.fetchall():
+                gender_distribution[row[0]] = row[1]
 
-            return jsonify({
-                "timePeriod": time_period,
-                "data": data,
-                "labels": labels
-            }), 200
+            # State distribution
+            cursor.execute("""
+                SELECT State, COUNT(*) as Count
+                FROM Voters
+                GROUP BY State
+            """)
+            
+            state_distribution = {}
+            for row in cursor.fetchall():
+                state_distribution[row[0]] = row[1]
+
+            demographics = {
+                "GenderDistribution": gender_distribution,
+                "StateDistribution": state_distribution
+            }
+
+            # 6. Get vote counts by time period
+            # Votes in last day, week, month
+            cursor.execute("""
+                SELECT 
+                    COUNT(CASE WHEN TO_DATE(ElectionDate, 'YYYY-MM-DD') >= CURRENT_DATE - INTERVAL '1 day' THEN 1 END) as last_day,
+                    COUNT(CASE WHEN TO_DATE(ElectionDate, 'YYYY-MM-DD') >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END) as last_week,
+                    COUNT(CASE WHEN TO_DATE(ElectionDate, 'YYYY-MM-DD') >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as last_month,
+                    COUNT(*) as total
+                FROM Votes
+                WHERE ElectionID = %s
+            """, (election_id,))
+            
+            time_counts = cursor.fetchone()
+            vote_time_data = {
+                "LastDay": time_counts[0],
+                "LastWeek": time_counts[1],
+                "LastMonth": time_counts[2],
+                "Total": time_counts[3]
+            }
+
+            # Prepare final response
+            response = {
+                "Election": election_data,
+                "Turnout": turnout_data,
+                "Results": results,
+                "Candidates": candidates,
+                "Demographics": demographics,
+                "VoteTimeData": vote_time_data,
+                "Votes": []  # Will be populated below
+            }
+
+            # 7. Get all votes with timestamps for time-based analysis
+            cursor.execute("""
+                SELECT v.VoteID, v.VoterID, v.ElectionDate, v.CandidateID, c.CandidateName
+                FROM Votes v
+                JOIN Candidates c ON v.CandidateID = c.CandidateID
+                WHERE v.ElectionID = %s
+                ORDER BY TO_DATE(v.ElectionDate, 'YYYY-MM-DD')
+            """, (election_id,))
+            
+            for row in cursor.fetchall():
+                response["Votes"].append({
+                    "VoteID": row[0],
+                    "VoterID": row[1],
+                    "ElectionDate": row[2],
+                    "CandidateID": row[3],
+                    "CandidateName": row[4]
+                })
+
+            return jsonify(response), 200
 
     except psycopg2.Error as e:
         print(f"Database error: {e}")
