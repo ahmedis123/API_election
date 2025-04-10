@@ -378,6 +378,7 @@ def get_candidates_by_election(election_id):
         return jsonify(candidate_list), 200
 
 # Function to retrieve elections
+
 @app.route('/elections', methods=['GET'])
 def get_elections():
     with create_connection() as conn:
@@ -393,24 +394,26 @@ def get_elections():
             election_id = row[0]
             election_dates = row[1]  # مثل: "2025-04-03 00:00:00.000 - 2025-05-09 00:00:00.000"
             election_type = row[2]
-            election_status = row[3]
+            election_status = row[3] if row[3] is not None else "غير محدد"  # تعيين قيمة افتراضية
 
-            try:
-                start_str, end_str = election_dates.split(' - ')
-                start_date = datetime.strptime(start_str.strip(), '%Y-%m-%d %H:%M:%S.%f')
-                end_date = datetime.strptime(end_str.strip(), '%Y-%m-%d %H:%M:%S.%f')
+            # التحقق من وجود قيمة لتاريخ الانتخابات
+            if election_dates is not None:
+                try:
+                    start_str, end_str = election_dates.split(' - ')
+                    start_date = datetime.strptime(start_str.strip(), '%Y-%m-%d %H:%M:%S.%f')
+                    end_date = datetime.strptime(end_str.strip(), '%Y-%m-%d %H:%M:%S.%f')
 
-                if election_status != 'مغلقة' and end_date < datetime.now():
-                    cursor.execute(
-    'UPDATE Elections SET ElectionStatus = %s WHERE ElectionID = %s',
-    ('منتهية', election_id)
-                    
-                    )
-                    conn.commit()
-                    election_status = 'منتهية'
-
-            except ValueError:
-                return jsonify({"error": f"Invalid date format for ElectionID {election_id}"}), 400
+                    if election_status != 'مغلقة' and end_date < datetime.now():
+                        cursor.execute(
+                            'UPDATE Elections SET ElectionStatus = %s WHERE ElectionID = %s',
+                            ('منتهية', election_id)
+                        )
+                        conn.commit()
+                        election_status = 'منتهية'
+                except ValueError:
+                    return jsonify({"error": f"Invalid date format for ElectionID {election_id}"}), 400
+            else:
+                election_dates = "غير محدد"
 
             elections.append({
                 "ElectionID": election_id,
