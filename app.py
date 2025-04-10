@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import psycopg2
 from psycopg2 import Error
 import hashlib
+from datetime import datetime 
 
 app = Flask(__name__)
 
@@ -389,14 +390,35 @@ def get_elections():
 
         elections = []
         for row in rows:
-            elections.append({
-                "ElectionID": row[0],
-                "ElectionDate": row[1],
-                "ElectionType": row[2],
-                "ElectionStatus": row[3]
-            })
-        return jsonify(elections), 200
+            election_id = row[0]
+            election_dates = row[1]  # مثل: "2025-04-03 00:00:00.000 - 2025-05-09 00:00:00.000"
+            election_type = row[2]
+            election_status = row[3]
 
+            try:
+                start_str, end_str = election_dates.split(' - ')
+                start_date = datetime.strptime(start_str.strip(), '%Y-%m-%d %H:%M:%S.%f')
+                end_date = datetime.strptime(end_str.strip(), '%Y-%m-%d %H:%M:%S.%f')
+
+                if election_status != 'مغلقة' and end_date < datetime.now():
+                    cursor.execute(
+                        'UPDATE Elections SET ElectionStatus = ? WHERE ElectionID = ?',
+                        ('منتهية', election_id)
+                    )
+                    conn.commit()
+                    election_status = 'منتهية'
+
+            except ValueError:
+                return jsonify({"error": f"Invalid date format for ElectionID {election_id}"}), 400
+
+            elections.append({
+                "ElectionID": election_id,
+                "ElectionDates": election_dates,
+                "ElectionType": election_type,
+                "ElectionStatus": election_status
+            })
+
+        return jsonify(elections), 200
 # Function to retrieve votes
 @app.route('/votes', methods=['GET'])
 def get_votes():
