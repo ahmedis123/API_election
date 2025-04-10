@@ -404,7 +404,7 @@ def get_elections():
                     cursor.execute(
     'UPDATE Elections SET ElectionStatus = %s WHERE ElectionID = %s',
     ('منتهية', election_id)
-                    )
+                    
                     )
                     conn.commit()
                     election_status = 'منتهية'
