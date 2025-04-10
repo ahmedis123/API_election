@@ -401,7 +401,9 @@ def get_elections():
                 end_date = datetime.strptime(end_str.strip(), '%Y-%m-%d %H:%M:%S.%f')
 
                 if election_status != 'مغلقة' and end_date < datetime.now():
-                    cursor.execute('UPDATE Elections SET ElectionStatus = %s WHERE ElectionID = %s',('منتهية', election_id)
+                    cursor.execute(
+    'UPDATE Elections SET ElectionStatus = %s WHERE ElectionID = %s',
+    ('منتهية', election_id)
                     )
                     )
                     conn.commit()
