@@ -382,59 +382,21 @@ def get_candidates_by_election(election_id):
 @app.route('/elections', methods=['GET'])
 def get_elections():
     with create_connection() as conn:
-        if conn is None:
-            return jsonify({"error": "Failed to connect to database"}), 500
-
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM Elections')
         rows = cursor.fetchall()
 
         if not rows:
-            return jsonify({"error": "No elections found"}), 404
+            return jsonify({"error": "No election found"}), 404
 
         elections = []
         for row in rows:
-            election_id = row[0]
-            election_dates = row[1]  # مثل: "2025-04-03 00:00:00.000 - 2025-05-09 00:00:00.000"
-            election_type = row[2]
-            election_status = row[3] if row[3] is not None else "غير محدد"  # تعيين قيمة افتراضية
-
-            # التحقق من وجود قيمة لتاريخ الانتخابات
-            if election_dates is not None:
-                try:
-                    start_str, end_str = election_dates.split(' - ')
-                    
-                    # محاولة التعامل مع التواريخ مع .%f (الأجزاء المئوية من الثانية)
-                    try:
-                        start_date = datetime.strptime(start_str.strip(), '%Y-%m-%d %H:%M:%S.%f')
-                    except ValueError:
-                        start_date = datetime.strptime(start_str.strip(), '%Y-%m-%d %H:%M:%S')
-
-                    try:
-                        end_date = datetime.strptime(end_str.strip(), '%Y-%m-%d %H:%M:%S.%f')
-                    except ValueError:
-                        end_date = datetime.strptime(end_str.strip(), '%Y-%m-%d %H:%M:%S')
-
-                    # إذا كانت الانتخابات غير مغلقة وكانت نهاية الانتخابات قد انتهت، نقوم بتحديث الحالة
-                    if election_status != 'مغلقة' and end_date < datetime.now():
-                        cursor.execute(
-                            'UPDATE Elections SET ElectionStatus = %s WHERE ElectionID = %s',
-                            ('منتهية', election_id)
-                        )
-                        conn.commit()
-                        election_status = 'منتهية'
-                except ValueError:
-                    return jsonify({"error": f"Invalid date format for ElectionID {election_id}"}), 400
-            else:
-                election_dates = "غير محدد"
-
             elections.append({
-                "ElectionID": election_id,
-                "ElectionDates": election_dates,
-                "ElectionType": election_type,
-                "ElectionStatus": election_status
+                "ElectionID": row[0],
+                "ElectionDate": row[1],
+                "ElectionType": row[2],
+                "ElectionStatus": row[3]
             })
-
         return jsonify(elections), 200
         
 # Function to retrieve votes
