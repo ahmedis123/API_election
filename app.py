@@ -382,12 +382,15 @@ def get_candidates_by_election(election_id):
 @app.route('/elections', methods=['GET'])
 def get_elections():
     with create_connection() as conn:
+        if conn is None:
+            return jsonify({"error": "Failed to connect to database"}), 500
+
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM Elections')
         rows = cursor.fetchall()
 
         if not rows:
-            return jsonify({"error": "No election found"}), 404
+            return jsonify({"error": "No elections found"}), 404
 
         elections = []
         for row in rows:
@@ -400,9 +403,19 @@ def get_elections():
             if election_dates is not None:
                 try:
                     start_str, end_str = election_dates.split(' - ')
-                    start_date = datetime.strptime(start_str.strip(), '%Y-%m-%d %H:%M:%S.%f')
-                    end_date = datetime.strptime(end_str.strip(), '%Y-%m-%d %H:%M:%S.%f')
+                    
+                    # محاولة التعامل مع التواريخ مع .%f (الأجزاء المئوية من الثانية)
+                    try:
+                        start_date = datetime.strptime(start_str.strip(), '%Y-%m-%d %H:%M:%S.%f')
+                    except ValueError:
+                        start_date = datetime.strptime(start_str.strip(), '%Y-%m-%d %H:%M:%S')
 
+                    try:
+                        end_date = datetime.strptime(end_str.strip(), '%Y-%m-%d %H:%M:%S.%f')
+                    except ValueError:
+                        end_date = datetime.strptime(end_str.strip(), '%Y-%m-%d %H:%M:%S')
+
+                    # إذا كانت الانتخابات غير مغلقة وكانت نهاية الانتخابات قد انتهت، نقوم بتحديث الحالة
                     if election_status != 'مغلقة' and end_date < datetime.now():
                         cursor.execute(
                             'UPDATE Elections SET ElectionStatus = %s WHERE ElectionID = %s',
@@ -423,6 +436,7 @@ def get_elections():
             })
 
         return jsonify(elections), 200
+        
 # Function to retrieve votes
 @app.route('/votes', methods=['GET'])
 def get_votes():
