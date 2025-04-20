@@ -117,6 +117,870 @@ def create_tables():
         else:
             print("Failed to create tables due to database connection error.")
 
+
+# إنشاء تطبيق Flask
+app = Flask(__name__)
+
+# تعريف مسار الصفحة الرئيسية '/'
+@app.route('/')
+def index():
+    """
+    يقدم كود HTML/CSS/JS المدمج مباشرة كسلسلة نصية.
+    """
+    # استخدام ثلاث علامات اقتباس لإنشاء سلسلة نصية متعددة الأسطر
+    html_content = """
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>نظام تقارير الانتخابات</title>
+  <style>
+    :root {
+      --primary-color: #0056b3;
+      --secondary-color: #6c757d;
+      --light-bg: #f8f9fa;
+      --white: #ffffff;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 1rem;
+      background-color: var(--light-bg);
+      direction: rtl;
+      color: #343a40;
+    }
+    .main-header {
+      display: none; /* Hidden by default, shown in print */
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    .main-header h2 {
+      margin: 0;
+      color: var(--primary-color);
+    }
+    .main-header p {
+      margin: 0;
+      font-size: 14px;
+      color: var(--secondary-color);
+    }
+    .container {
+      background-color: var(--white);
+      padding: 1.5rem;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.05);
+      margin-bottom: 2rem;
+      max-width: 1000px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    h1, h2 {
+      color: var(--primary-color);
+      font-size: 1.4rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+      font-size: 0.95rem;
+      display: block; /* Use block + overflow for responsiveness */
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+    th, td {
+      border: 1px solid #dee2e6;
+      padding: 0.75rem;
+      text-align: right;
+      min-width: 100px; /* Minimum width for cells */
+    }
+    th {
+      background-color: var(--primary-color);
+      color: var(--white);
+    }
+     table tbody tr:nth-child(even) {
+      background-color: #f2f2f2;
+    }
+    button {
+      margin: 0.5rem 0.25rem;
+      padding: 0.6rem 1.2rem;
+      font-size: 1rem;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      transition: background-color 0.3s ease;
+    }
+    .btn-view { background-color: var(--secondary-color); color: var(--white); }
+    .btn-view:hover { background-color: #5a6268; }
+    .btn-primary { background-color: var(--primary-color); color: var(--white); }
+    .btn-primary:hover { background-color: #004494; }
+
+    .form-group {
+        margin-bottom: 1rem;
+        display: flex; /* Use flexbox for layout */
+        align-items: center; /* Align items vertically */
+        gap: 1rem; /* Space between items */
+        flex-wrap: wrap; /* Allow wrapping on smaller screens */
+    }
+    .form-group label {
+        /* display: inline-block; */
+        margin-bottom: 0; /* Reset margin */
+        font-weight: bold;
+    }
+     .form-group input[type="text"],
+     .form-group input[type="number"],
+    .form-group input[type="date"] {
+        padding: 0.5rem;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        font-size: 1rem;
+        /* margin-left: 0.5rem; */
+        width: auto; /* Allow input to size based on content/flex */
+        flex-grow: 1; /* Allow input to grow */
+        min-width: 150px; /* Minimum width */
+    }
+     .form-group button {
+         margin: 0; /* Reset margin */
+         flex-shrink: 0; /* Prevent button from shrinking */
+     }
+
+
+    .tools-only {
+      /* display: inline-block; */ /* Control visibility for tools on main page */
+    }
+     .report-tools { /* New class for buttons in new window */
+         margin-top: 2rem;
+         text-align: center;
+     }
+     .report-tools button {
+         margin: 0.5rem;
+     }
+     .btn-back { background-color: #dc3545; color: white; }
+     .btn-print { background-color: #28a745; color: white; }
+     .btn-email { background-color: #007bff; color: white; }
+     .btn-main { background-color: #0056b3; color: white; }
+
+     #errorMessage {
+         color: red;
+         margin-top: 1rem;
+         font-weight: bold;
+     }
+      #loadingMessage {
+          color: var(--primary-color);
+          margin-top: 1rem;
+          font-weight: bold;
+          display: none; /* Hidden by default */
+      }
+
+
+    /* Print Styles */
+    @media print {
+      .main-header { display: block !important; }
+      .tools-only, .report-tools, .form-selection, #election-selector, #errorMessage, #loadingMessage { display: none !important; } /* Hide UI elements */
+      .container { box-shadow: none; border: none; padding: 0; margin-bottom: 1rem; } /* Adjust layout for print */
+      body {
+        background-color: white !important;
+        color: black !important;
+        font-size: 12pt; /* Adjust font size for print */
+        padding: 0.5rem;
+      }
+      table {
+        display: table !important; /* Revert table display for print */
+        overflow-x: visible !important;
+        white-space: normal !important;
+        width: 100%; /* Ensure table takes full width */
+        page-break-inside: auto; /* Allow tables to break across pages */
+      }
+       table thead {
+           display: table-header-group; /* Repeat table headers on each page */
+       }
+       table tr {
+           page-break-inside: avoid; /* Avoid breaking rows */
+           page-break-after: auto;
+       }
+      th, td {
+        min-width: auto !important; /* Remove minimum width in print */
+         padding: 0.5rem;
+      }
+       h1, h2 {
+           color: #000 !important; /* Black color for headings in print */
+       }
+       ul li {
+           margin-bottom: 0.3rem;
+       }
+    }
+    /* Responsive Styles */
+    @media (max-width: 768px) {
+      body {
+        padding: 0.5rem;
+      }
+      .container {
+        padding: 1rem;
+      }
+       .form-group {
+           flex-direction: column; /* Stack form elements vertically */
+           align-items: stretch; /* Stretch items to full width */
+           gap: 0.5rem; /* Adjust gap */
+       }
+        .form-group label {
+           margin-bottom: 0.2rem; /* Add space below label */
+       }
+       .form-group input[type="text"],
+       .form-group input[type="number"],
+       .form-group input[type="date"] {
+            min-width: auto; /* Allow shrinking */
+            width: 100%; /* Full width */
+            flex-grow: 0; /* Prevent growing */
+       }
+       .form-group button {
+           width: 100%; /* Full width button */
+           margin: 0.5rem 0 0 0; /* Adjust margin */
+       }
+
+      table {
+        /* Properties already set for responsiveness */
+      }
+      table th, table td {
+        font-size: 0.85rem;
+        padding: 0.5rem;
+        /* min-width: 120px; */ /* Adjusted min-width */
+      }
+      h1, h2 {
+        font-size: 1.2rem;
+      }
+       .report-tools button {
+           display: block;
+           width: 100%;
+           margin: 0.5rem 0;
+       }
+    }
+  </style>
+</head>
+<body>
+<div class="main-header" id="printHeader">
+  <h2>نظام تقارير الانتخابات</h2>
+  <p>المفوضية القومية للانتخابات - السودان</p>
+</div>
+
+<div class="container" id="election-selector">
+  <h1>تحديد الانتخابات</h1>
+  <div class="form-group">
+    <label for="electionIdInput">معرف الانتخابات (Election ID):</label>
+    <input type="number" id="electionIdInput" value="1" min="1" placeholder="أدخل معرف الانتخابات">
+    <button class="btn-primary" onclick="fetchElectionData()">جلب البيانات</button>
+  </div>
+  <p id="loadingMessage">جارٍ جلب البيانات...</p>
+  <p id="errorMessage"></p>
+</div>
+
+
+<div class="container" id="report-general">
+  <h1>تقرير عام عن الانتخابات</h1>
+  <ul id="election-details-list">
+    <li>الرجاء جلب بيانات الانتخابات أولاً.</li>
+    </ul>
+  <div class="print-footer"><p>التاريخ: <span class="printDate"></span></p></div>
+  <button class="btn-view tools-only" onclick="openReportWindow('report-general')">عرض في صفحة جديدة</button>
+</div>
+
+<div class="container" id="report-turnout">
+  <h1>تقرير إقبال الناخبين</h1>
+  <ul id="turnout-details-list">
+     <li>الرجاء جلب بيانات الانتخابات أولاً.</li>
+    </ul>
+  <div class="print-footer"><p>التاريخ: <span class="printDate"></span></p></div>
+  <button class="btn-view tools-only" onclick="openReportWindow('report-turnout')">عرض في صفحة جديدة</button>
+</div>
+
+<div class="container" id="report-voter-timeframe">
+  <h1>تقرير عدد المصوتين في فترة زمنية محددة</h1>
+  <div class="tools-only form-selection">
+      <div class="form-group">
+          <label for="startDate">من تاريخ:</label>
+          <input type="date" id="startDate">
+      </div>
+      <div class="form-group">
+          <label for="endDate">إلى تاريخ:</label>
+          <input type="date" id="endDate">
+      </div>
+      <button class="btn-primary" onclick="generateVoterTimeframeReport()">عرض التقرير</button>
+  </div>
+
+  <div id="voterTimeframeResults">
+      <h2>النتائج للفترة المحددة</h2>
+      <table id="voterTimeframeTable">
+          <thead>
+              <tr>
+                  <th>بداية الفترة</th>
+                  <th>نهاية الفترة</th>
+                  <th>عدد المصوتين</th>
+              </tr>
+          </thead>
+          <tbody>
+               <tr>
+                  <td id="displayStartDate"></td>
+                  <td id="displayEndDate"></td>
+                  <td id="displayVoterCount"></td>
+              </tr>
+              </tbody>
+      </table>
+       <p id="noDataMessage" style="display: none; color: #dc3545;">لا توجد بيانات متاحة لهذه الفترة.</p>
+  </div>
+
+  <div class="print-footer"><p>التاريخ: <span class="printDate"></span></p></div>
+  <button class="btn-view tools-only" onclick="openReportWindow('report-voter-timeframe')">عرض في صفحة جديدة</button>
+</div>
+
+
+<div class="container" id="report-results">
+  <h1>نتائج المرشحين</h1>
+  <table id="results-table">
+    <thead><tr><th>المرشح</th><th>الحزب</th><th>الأصوات</th><th>النسبة</th></tr></thead>
+    <tbody>
+      </tbody>
+  </table>
+  <div class="print-footer"><p>التاريخ: <span class="printDate"></span></p></div>
+  <button class="btn-view tools-only" onclick="openReportWindow('report-results')">عرض في صفحة جديدة</button>
+</div>
+
+<div class="container" id="report-demographics">
+  <h1>البيانات الديموغرافية</h1>
+  <h2>حسب الجنس</h2>
+  <table id="gender-demographics-table">
+    <thead><tr><th>الجنس</th><th>العدد</th><th>النسبة</th></tr></thead>
+    <tbody>
+      </tbody>
+  </table>
+  <h2>حسب الولاية</h2>
+  <table id="state-demographics-table">
+    <thead><tr><th>الولاية</th><th>العدد</th><th>النسبة</th></tr></thead>
+    <tbody>
+      </tbody>
+  </table>
+  <div class="print-footer"><p>التاريخ: <span class="printDate"></span></p></div>
+  <button class="btn-view tools-only" onclick="openReportWindow('report-demographics')">عرض في صفحة جديدة</button>
+</div>
+
+<script>
+  // Global variable to store fetched election data
+  let electionData = null;
+  const loadingMessageEl = document.getElementById('loadingMessage');
+  const errorMessageEl = document.getElementById('errorMessage');
+
+  document.querySelectorAll('.printDate').forEach(el => {
+    el.textContent = new Date().toLocaleDateString('ar-EG');
+  });
+
+  // Function to clear existing report data
+  function clearAllReports() {
+      // Clear lists
+      document.getElementById('election-details-list').innerHTML = '<li>الرجاء جلب بيانات الانتخابات أولاً.</li>';
+      document.getElementById('turnout-details-list').innerHTML = '<li>الرجاء جلب بيانات الانتخابات أولاً.</li>';
+
+      // Clear tables
+      document.querySelector('#results-table tbody').innerHTML = '';
+      document.querySelector('#gender-demographics-table tbody').innerHTML = '';
+      document.querySelector('#state-demographics-table tbody').innerHTML = '';
+
+      // Clear and hide timeframe report results
+      document.getElementById('displayStartDate').textContent = '';
+      document.getElementById('displayEndDate').textContent = '';
+      document.getElementById('displayVoterCount').textContent = '';
+      document.getElementById('voterTimeframeTable').style.display = 'none';
+      document.getElementById('noDataMessage').style.display = 'none';
+       document.getElementById('startDate').value = ''; // Clear date inputs
+       document.getElementById('endDate').value = '';
+  }
+
+   // Function to format numbers
+  function formatNumber(num) {
+      if (num === undefined || num === null) return '';
+      return num.toLocaleString('ar-EG');
+  }
+
+  // Function to calculate and format percentage
+  function formatPercentage(part, total) {
+      if (total === 0 || total === undefined || total === null || part === undefined || part === null) return '0%';
+      return ((part / total) * 100).toFixed(2) + '%';
+  }
+
+  // Functions to render specific report sections
+  function renderElectionDetails(election) {
+      const ul = document.getElementById('election-details-list');
+      ul.innerHTML = `
+          <li><strong>معرف الانتخابات:</strong> ${election.ElectionID}</li>
+          <li><strong>نوع الانتخابات:</strong> ${election.ElectionType}</li>
+          <li><strong>تاريخ الانتخابات:</strong> ${election.ElectionDate}</li>
+          <li><strong>الحالة:</strong> ${election.ElectionStatus}</li>
+      `;
+  }
+
+  function renderTurnout(turnout) {
+      const ul = document.getElementById('turnout-details-list');
+      ul.innerHTML = `
+          <li><strong>عدد الناخبين المسجلين:</strong> ${formatNumber(turnout.TotalRegisteredVoters)}</li>
+          <li><strong>عدد المصوتين:</strong> ${formatNumber(turnout.VotersVoted)}</li>
+          <li><strong>نسبة الإقبال:</strong> ${formatPercentage(turnout.VotersVoted, turnout.TotalRegisteredVoters)}</li>
+      `;
+  }
+
+  function renderResults(results, totalVotes) {
+      const tbody = document.querySelector('#results-table tbody');
+      tbody.innerHTML = ''; // Clear existing rows
+
+      if (!results || results.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">لا توجد نتائج متاحة.</td></tr>';
+          return;
+      }
+
+      results.forEach(candidate => {
+          const row = tbody.insertRow();
+          row.innerHTML = `
+              <td>${candidate.CandidateName}</td>
+              <td>${candidate.PartyName || 'مستقل'}</td>
+              <td>${formatNumber(candidate.VoteCount)}</td>
+              <td>${formatPercentage(candidate.VoteCount, totalVotes)}</td>
+          `;
+      });
+  }
+
+  function renderDemographics(demographics, totalVoters) {
+      // Gender
+      const genderTbody = document.querySelector('#gender-demographics-table tbody');
+      genderTbody.innerHTML = ''; // Clear existing rows
+
+      if (!demographics || !demographics.GenderDistribution || Object.keys(demographics.GenderDistribution).length === 0) {
+           genderTbody.innerHTML = '<tr><td colspan="3" style="text-align: center;">لا توجد بيانات ديموغرافية (الجنس) متاحة.</td></tr>';
+      } else {
+           for (const gender in demographics.GenderDistribution) {
+               const count = demographics.GenderDistribution[gender];
+               const row = genderTbody.insertRow();
+               row.innerHTML = `
+                   <td>${gender || 'غير محدد'}</td>
+                   <td>${formatNumber(count)}</td>
+                   <td>${formatPercentage(count, totalVoters)}</td>
+               `;
+           }
+      }
+
+
+      // State
+      const stateTbody = document.querySelector('#state-demographics-table tbody');
+      stateTbody.innerHTML = ''; // Clear existing rows
+
+       if (!demographics || !demographics.StateDistribution || Object.keys(demographics.StateDistribution).length === 0) {
+           stateTbody.innerHTML = '<tr><td colspan="3" style="text-align: center;">لا توجد بيانات ديموغرافية (الولاية) متاحة.</td></tr>';
+       } else {
+           for (const state in demographics.StateDistribution) {
+               const count = demographics.StateDistribution[state];
+               const row = stateTbody.insertRow();
+               row.innerHTML = `
+                   <td>${state || 'غير محدد'}</td>
+                   <td>${formatNumber(count)}</td>
+                   <td>${formatPercentage(count, totalVoters)}</td>
+               `;
+           }
+       }
+  }
+
+  // Main function to fetch data
+  async function fetchElectionData() {
+      const electionId = document.getElementById('electionIdInput').value;
+      errorMessageEl.style.display = 'none'; // Hide previous errors
+      loadingMessageEl.style.display = 'none'; // Hide loading initially
+
+      if (!electionId || parseInt(electionId) <= 0) {
+          errorMessageEl.textContent = "الرجاء إدخال معرف انتخابات صحيح.";
+          errorMessageEl.style.display = 'block';
+          clearAllReports(); // Clear old data if input is invalid
+          return;
+      }
+
+      loadingMessageEl.style.display = 'block'; // Show loading message
+      clearAllReports(); // Clear reports while loading
+
+      try {
+          const response = await fetch(`https://election-sd.onrender.com/election_reports/${electionId}`);
+
+          if (!response.ok) {
+              const errorJson = await response.json();
+              const errorMsg = errorJson.error || `حدث خطأ غير معروف (Status: ${response.status})`;
+              errorMessageEl.textContent = `خطأ في جلب البيانات: ${errorMsg}`;
+              errorMessageEl.style.display = 'block';
+              electionData = null; // Clear old data on error
+              // Reports are already cleared by clearAllReports()
+              return;
+          }
+
+          electionData = await response.json();
+          console.log("Data fetched successfully:", electionData);
+
+          // Calculate total votes for percentage calculation in results
+          const totalVotes = electionData.Turnout ? electionData.Turnout.VotersVoted : 0;
+           const totalRegisteredVoters = electionData.Turnout ? electionData.Turnout.TotalRegisteredVoters : 0;
+
+          // Render the data into the respective sections
+          if (electionData.Election) renderElectionDetails(electionData.Election);
+          if (electionData.Turnout) renderTurnout(electionData.Turnout);
+          if (electionData.Results) renderResults(electionData.Results, totalVotes);
+          if (electionData.Demographics) renderDemographics(electionData.Demographics, totalRegisteredVoters);
+
+          // Note: VoteTimeData from API includes last day/week/month counts,
+          // but the HTML report asks for a custom timeframe.
+          // We store electionData.Votes (the raw list) for the timeframe report function.
+
+          // Reset timeframe report display after new data is loaded
+          resetTimeframeReportDisplay();
+
+
+      } catch (error) {
+          console.error("Fetch error:", error);
+          errorMessageEl.textContent = "فشل في الاتصال بالخادم أو معالجة البيانات.";
+          errorMessageEl.style.display = 'block';
+          electionData = null; // Clear old data on error
+          // Reports are already cleared by clearAllReports()
+      } finally {
+           loadingMessageEl.style.display = 'none'; // Hide loading message
+      }
+  }
+
+  // Function to generate the timeframe report using fetched data
+  function generateVoterTimeframeReport() {
+      if (!electionData || !electionData.Votes) {
+          alert("الرجاء جلب بيانات الانتخابات أولاً.");
+          return;
+      }
+
+      const startDateInput = document.getElementById('startDate').value;
+      const endDateInput = document.getElementById('endDate').value;
+
+      const displayStartDateEl = document.getElementById('displayStartDate');
+      const displayEndDateEl = document.getElementById('displayEndDate');
+      const displayVoterCountEl = document.getElementById('displayVoterCount');
+      const noDataMessageEl = document.getElementById('noDataMessage');
+      const resultsTable = document.getElementById('voterTimeframeTable');
+
+       // Hide previous results/messages
+      resultsTable.style.display = 'none';
+      noDataMessageEl.style.display = 'none';
+       displayVoterCountEl.textContent = '';
+
+
+      if (!startDateInput || !endDateInput) {
+          alert("الرجاء تحديد تاريخ بداية ونهاية الفترة.");
+          return;
+      }
+
+      const startDate = new Date(startDateInput + 'T00:00:00'); // Include time to ensure correct date interpretation
+      const endDate = new Date(endDateInput + 'T23:59:59.999'); // Include time to include the whole end day
+
+
+      if (startDate > endDate) {
+          alert("تاريخ البداية يجب أن يكون قبل أو يساوي تاريخ النهاية.");
+          return;
+      }
+
+      // Filter votes based on date
+      const votesInTimeframe = electionData.Votes.filter(vote => {
+          // Assuming vote.ElectionDate is 'YYYY-MM-DD' string
+          const voteDate = new Date(vote.ElectionDate + 'T00:00:00'); // Parse vote date
+
+          return voteDate >= startDate && voteDate <= endDate;
+      });
+
+      const voterCount = votesInTimeframe.length;
+
+      displayStartDateEl.textContent = startDateInput; // Display selected input dates
+      displayEndDateEl.textContent = endDateInput;
+
+      if (voterCount > 0) {
+          displayVoterCountEl.textContent = formatNumber(voterCount);
+          resultsTable.style.display = 'table'; // Show table
+          noDataMessageEl.style.display = 'none'; // Hide no data message
+      } else {
+          displayVoterCountEl.textContent = ''; // Clear count
+          resultsTable.style.display = 'none'; // Hide table
+          noDataMessageEl.style.display = 'block'; // Show no data message
+      }
+
+       // Log filtered votes for debugging if needed
+      // console.log("Votes in timeframe:", votesInTimeframe);
+  }
+
+  // Function to reset the display of the timeframe report section
+  function resetTimeframeReportDisplay() {
+       document.getElementById('startDate').value = '';
+       document.getElementById('endDate').value = '';
+       document.getElementById('displayStartDate').textContent = '';
+       document.getElementById('displayEndDate').textContent = '';
+       document.getElementById('displayVoterCount').textContent = '';
+       document.getElementById('voterTimeframeTable').style.display = 'none';
+       document.getElementById('noDataMessage').style.display = 'none';
+  }
+
+
+  function openReportWindow(reportId) {
+    const content = document.getElementById(reportId).cloneNode(true);
+
+    // Specific handling for timeframe report when opening in new window
+    if (reportId === 'report-voter-timeframe') {
+       // Remove the form inputs and button
+       const formSection = content.querySelector('.form-selection');
+       if(formSection) formSection.remove();
+
+        // Ensure the results section is visible if it has content
+        const resultsDiv = content.querySelector('#voterTimeframeResults');
+        if(resultsDiv) {
+            resultsDiv.style.display = 'block'; // Make results visible
+            // Check if the table is hidden (meaning no data was found for the selected period)
+            const timeframeTable = resultsDiv.querySelector('#voterTimeframeTable');
+             const noDataMessage = resultsDiv.querySelector('#noDataMessage');
+             if (timeframeTable && timeframeTable.style.display === 'none') {
+                 // If table is hidden on main page, show the "no data" message in the new window
+                 if (noDataMessage) noDataMessage.style.display = 'block';
+             } else {
+                 // If table was visible (had data), ensure no data message is hidden
+                 if (noDataMessage) noDataMessage.style.display = 'none';
+             }
+        }
+    } else {
+        // For other reports, just ensure tools-only buttons are removed
+         content.querySelectorAll('.tools-only').forEach(el => el.remove());
+    }
+
+     // Ensure the print date is correctly set in the cloned content
+     content.querySelectorAll('.printDate').forEach(el => {
+         el.textContent = new Date().toLocaleDateString('ar-EG');
+     });
+
+
+    const header = document.getElementById('printHeader').innerHTML;
+    const win = window.open('', '_blank', 'width=1000,height=800');
+    win.document.write(`
+      <html lang="ar" dir="rtl">
+      <head>
+        <meta charset="UTF-8">
+        <title>عرض التقرير</title>
+        <style>
+          body { font-family: 'Segoe UI', Tahoma; padding: 2rem; direction: rtl; background: white; color: #343a40; line-height: 1.6; }
+          .main-header { text-align: center; margin-bottom: 2rem; border-bottom: 2px solid #0056b3; padding-bottom: 1rem; }
+          .main-header h2 { color: #0056b3; margin: 0; }
+          .main-header p { font-size: 14px; color: #6c757d; margin: 0; }
+          h1, h2 { color: #0056b3; font-size: 1.3rem; margin-top: 1.5rem; margin-bottom: 0.8rem;}
+           h2 { font-size: 1.2rem; }
+          ul { list-style: none; padding: 0; margin-bottom: 1.5rem;}
+          ul li { margin-bottom: 0.5rem; }
+          table { width: 100%; border-collapse: collapse; margin-top: 1rem; margin-bottom: 1.5rem; font-size: 0.95rem;}
+          th, td { border: 1px solid #dee2e6; padding: 0.75rem; text-align: right; }
+          th { background-color: #0056b3; color: white; }
+           table tbody tr:nth-child(even) { background-color: #f2f2f2; }
+
+          .print-footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px dashed #999; font-size: 14px; color: #333; }
+          .report-tools { /* Buttons in new window */
+              margin-top: 2rem;
+              text-align: center;
+          }
+          .report-tools button {
+              margin: 0.5rem; padding: 0.5rem 1rem; font-size: 1rem; border: none; border-radius: 4px; cursor: pointer;
+          }
+          .btn-back { background-color: #dc3545; color: white; }
+          .btn-print { background-color: #28a745; color: white; }
+          .btn-email { background-color: #007bff; color: white; }
+          .btn-main { background-color: #0056b3; color: white; }
+
+          #noDataMessage { color: #dc3545; font-weight: bold; margin-top: 1rem; }
+
+          @media print  {
+             .report-tools { display: none !important; } /* Hide tools in print view */
+             body { padding: 0.5rem; font-size: 12pt; }
+             table { display: table !important; width: 100%; }
+             th, td { padding: 0.5rem; }
+             .container { box-shadow: none; border: none; padding: 0; margin-bottom: 1rem; }
+              .main-header { display: block !important; }
+               table thead { display: table-header-group; }
+               table tr { page-break-inside: avoid; page-break-after: auto; }
+          }
+           @media (max-width: 768px) {
+               body { padding: 0.5rem; }
+               table { font-size: 0.85rem; }
+               th, td { padding: 0.5rem; }
+               .report-tools button { display: block; width: 100%; margin: 0.5rem 0; }
+           }
+
+        </style></head>
+  <body>
+    <div class="main-header">${header}</div>
+    <div class="report-content">${content.innerHTML}</div> <div class="report-tools">
+      <button class="btn-main" onclick="window.close();">إغلاق النافذة</button>
+      <button class="btn-print" onclick="window.print()">طباعة</button>
+      <button class="btn-email" onclick="sendByEmailWindow('${reportId}')">إرسال عبر الإيميل</button>
+    </div>
+    <script>
+      // Ensure print dates are set in the new window
+      window.addEventListener('load', () => {
+          document.querySelectorAll('.printDate').forEach(el => {
+              el.textContent = new Date().toLocaleDateString('ar-EG');
+          });
+
+          // In the new window, ensure table display is correct after load
+           const timeframeTable = document.getElementById('voterTimeframeTable');
+           if (timeframeTable) {
+               // If the table had content when cloned, ensure it's 'table'
+               if (timeframeTable.querySelector('tbody').children.length > 0 && timeframeTable.querySelector('tbody').children[0].cells.length > 1) {
+                    timeframeTable.style.display = 'table';
+                     const noDataMessage = document.getElementById('noDataMessage');
+                     if(noDataMessage) noDataMessage.style.display = 'none';
+               } else {
+                    // If the table was empty or hidden when cloned, show the no data message if present
+                     timeframeTable.style.display = 'none';
+                     const noDataMessage = document.getElementById('noDataMessage');
+                     if(noDataMessage) noDataMessage.style.display = 'block';
+               }
+           }
+
+      });
+
+
+      function sendByEmailWindow(reportId) {
+        // This is a basic implementation, might not work well with complex HTML
+        const reportElement = document.getElementById(reportId);
+        let reportContent = 'تقرير الانتخابات\\n\\n';
+
+        // Try to extract text content reasonably
+        if (reportElement) {
+             // Simple text extraction - loses formatting
+             // reportContent += reportElement.innerText;
+
+             // More structured extraction based on report ID
+             if (reportId === 'report-general') {
+                 reportContent += 'تقرير عام عن الانتخابات\\n\\n';
+                 const listItems = reportElement.querySelectorAll('ul li');
+                 listItems.forEach(item => {
+                     reportContent += item.textContent.trim() + '\\n';
+                 });
+
+             } else if (reportId === 'report-turnout') {
+                  reportContent += 'تقرير إقبال الناخبين\\n\\n';
+                 const listItems = reportElement.querySelectorAll('ul li');
+                 listItems.forEach(item => {
+                     reportContent += item.textContent.trim() + '\\n';
+                 });
+
+             } else if (reportId === 'report-results') {
+                  reportContent += 'نتائج المرشحين\\n\\n';
+                  const rows = reportElement.querySelectorAll('table tbody tr');
+                  if (rows.length > 0 && rows[0].cells.length > 1) { // Check if there's actual data
+                      reportContent += 'المرشح | الحزب | الأصوات | النسبة\\n';
+                      reportContent += '------|-------|--------|-------\\n';
+                      rows.forEach(row => {
+                          const cells = row.querySelectorAll('td');
+                          if (cells.length === 4) {
+                              reportContent += \`\${cells[0].textContent.trim()} | \${cells[1].textContent.trim()} | \${cells[2].textContent.trim()} | \${cells[3].textContent.trim()}\\n\`;
+                          } else {
+                             reportContent += row.textContent.trim() + '\\n'; // Handle 'no data' row
+                          }
+                      });
+                  } else {
+                      reportContent += 'لا توجد نتائج متاحة.\\n';
+                  }
+
+
+             } else if (reportId === 'report-demographics') {
+                  reportContent += 'البيانات الديموغرافية\\n\\n';
+                  reportContent += 'حسب الجنس:\\n';
+                  const genderRows = reportElement.querySelectorAll('#gender-demographics-table tbody tr');
+                   if (genderRows.length > 0 && genderRows[0].cells.length > 1) {
+                       reportContent += 'الجنس | العدد | النسبة\\n';
+                       reportContent += '------|-------|-------|\\n';
+                       genderRows.forEach(row => {
+                           const cells = row.querySelectorAll('td');
+                           if (cells.length === 3) {
+                              reportContent += \`\${cells[0].textContent.trim()} | \${cells[1].textContent.trim()} | \${cells[2].textContent.trim()}\\n\`;
+                           } else {
+                               reportContent += row.textContent.trim() + '\\n'; // Handle 'no data' row
+                           }
+                       });
+                   } else {
+                        reportContent += 'لا توجد بيانات (الجنس).\\n';
+                   }
+
+
+                  reportContent += '\\nحسب الولاية:\\n';
+                   const stateRows = reportElement.querySelectorAll('#state-demographics-table tbody tr');
+                   if (stateRows.length > 0 && stateRows[0].cells.length > 1) {
+                       reportContent += 'الولاية | العدد | النسبة\\n';
+                       reportContent += '--------|-------|-------|\\n';
+                       stateRows.forEach(row => {
+                           const cells = row.querySelectorAll('td');
+                            if (cells.length === 3) {
+                              reportContent += \`\${cells[0].textContent.trim()} | \${cells[1].textContent.trim()} | \${cells[2].textContent.trim()}\\n\`;
+                           } else {
+                               reportContent += row.textContent.trim() + '\\n'; // Handle 'no data' row
+                           }
+                       });
+                    } else {
+                         reportContent += 'لا توجد بيانات (الولاية).\\n';
+                    }
+
+
+             } else if (reportId === 'report-voter-timeframe') {
+                 reportContent += 'تقرير عدد المصوتين في فترة زمنية محددة:\\n\\n';
+                 const startDate = document.getElementById('displayStartDate')?.innerText || 'غير محدد';
+                 const endDate = document.getElementById('displayEndDate')?.innerText || 'غير محدد';
+                 const voterCount = document.getElementById('displayVoterCount')?.innerText || '';
+                 const noData = document.getElementById('noDataMessage')?.innerText || '';
+
+                 reportContent += \`من تاريخ: \${startDate}\\nإلى تاريخ: \${endDate}\\n\\n\`;
+
+                 if (voterCount) {
+                     reportContent += \`عدد المصوتين: \${voterCount}\\n\`;
+                 } else if (noData && noData !== 'لا توجد بيانات متاحة لهذه الفترة.') { // Avoid duplicating default message
+                      reportContent += \`\${noData}\\n\`;
+                 } else if (noData === 'لا توجد بيانات متاحة لهذه الفترة.') {
+                     reportContent += 'لا توجد بيانات متاحة لهذه الفترة.\\n';
+                 } else {
+                      reportContent += 'الرجاء تحديد فترة وعرض التقرير أولاً.\\n';
+                 }
+
+             } else {
+                  // Fallback for any other case - just get the text content
+                  reportContent += reportElement.innerText;
+             }
+        }
+
+
+        // Encode the content for mailto link
+        const body = encodeURIComponent(reportContent);
+        // Use window.location.href to open the default email client
+        window.location.href = 'mailto:?subject=' + encodeURIComponent('تقرير الانتخابات (' + (document.querySelector('#report-general li:first-child')?.textContent || 'غير محدد') + ')') + '&body=' + body;
+      }
+    <\/script>
+  </body>
+  </html>
+`);
+win.document.close();
+
+}
+
+  // Initial state: Clear reports on page load
+  window.addEventListener('load', () => {
+       clearAllReports();
+  });
+
+
+</script>
+
+</body>
+</html>
+
+"""
+    # إرجاع السلسلة النصية. Flask سيعرف أنها HTML.
+    return html_content
+
+
+
 # Function to add voters
 @app.route('/voters', methods=['POST'])
 def add_voter():
