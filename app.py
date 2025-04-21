@@ -815,7 +815,7 @@ def index():
     <div class="report-content">${content.innerHTML}</div> <div class="report-tools">
       <button class="btn-main" onclick="window.close();">إغلاق النافذة</button>
       <button class="btn-print" onclick="window.print()">طباعة</button>
-      <button class="btn-email" onclick="sendByEmailWindow('${reportId}')">إرسال عبر الإيميل</button>
+      <button type="button" class="btn-email" onclick="sendByEmailWindow('${reportId}')">إرسال عبر الإيميل</button>
     </div>
     <script>
       // Ensure print dates are set in the new window
