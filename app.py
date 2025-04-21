@@ -3,8 +3,10 @@ import psycopg2
 from psycopg2 import Error
 import hashlib
 from datetime import datetime 
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 
 # Database connection function
 def create_connection():
