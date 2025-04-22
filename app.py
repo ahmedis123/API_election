@@ -5,8 +5,7 @@ import hashlib
 from datetime import datetime 
 from flask_cors import CORS
 
-app = Flask(__name__)
-CORS(app)
+
 
 # Database connection function
 def create_connection():
@@ -122,6 +121,7 @@ def create_tables():
 
 # إنشاء تطبيق Flask
 app = Flask(__name__)
+CORS(app)
 
 # تعريف مسار الصفحة الرئيسية '/'
 @app.route('/')
